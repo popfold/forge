@@ -120,6 +120,35 @@ fails with `API_NO_ACTIVE_SUBSCRIPTION`. Set the key with `RODIN_API_KEY`, or po
 `forge.json` (or `RODIN_KEY_FILE`) at a file outside the repository. `rodin.tier` sets the default tier
 (`Gen-2.5-Medium`; about 0.5 credits a model). Ask before a batch: every model costs money.
 
+### Rodin from an agent, on any plan (MCP)
+
+Hyper3D's MCP server bills the workspace you sign in with, at its plan and credits, so it works on Creator where
+the REST API refuses. Add it once, for every project, and sign in (a browser window opens). Its tools load in the
+next session.
+
+```
+claude mcp add --transport http hyper3d-rodin --scope user https://api.hyper3d.com/api/mcp
+claude mcp login hyper3d-rodin
+```
+
+The tools an agent uses for a prop:
+
+| Tool | What it does | Costs credits |
+|---|---|---|
+| `rodin_create_uploads` | Gives a one-hour URL per picture; `PUT` the file's bytes there, then pass the upload id | no |
+| `rodin_generate` | Pictures or text to a textured model: `tier`, `mesh_mode` (`Raw` = triangles, `Quad`), `quality_override` (face count), `geometry_file_format` (`glb`) | yes |
+| `rodin_wait`, `rodin_get_status` | Waits up to 45 s, or reads the stage (mesh, texture, pack) | no |
+| `rodin_get_result` | The result page and signed download URLs (`base_basic_pbr.glb`, `base_basic_shaded.glb`) | no |
+| `rodin_generate_polygen` | A low-poly remesh of a finished model | yes |
+| `rodin_generate_agentic` | Beta: builds hard-surface subjects from editable n-gons | yes |
+| `rodin_generate_bang`, `rodin_generate_rigging` | Split a model into parts; add a skeleton and animations | yes |
+| `rodin_list_uploads`, `rodin_delete_uploads`, `rodin_list_animation_*` | The upload library and the animation catalogue | no |
+
+There is no balance tool; the website shows the credits left. One picture with `tier: Gen-2.5-High`,
+`mesh_mode: Raw`, `quality_override: 6000`, `geometry_file_format: glb` took about two minutes and gave a 6,000-
+triangle model with a 7 MB PBR `.glb`, as good as the same settings on the website (Gen-2.5 on the website costs
+about 0.5 credits a model). Download it outside the repository and check it with `blender_render.py` like any other.
+
 ## Make wall art
 
 ```
