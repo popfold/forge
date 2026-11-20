@@ -103,6 +103,23 @@ it answers. One prop takes about two minutes a round on a 12 GB card.
 `llm.banned` in `forge.json` is a list of words (brand or character names) that must never reach a prompt; a plan
 that uses one is sent back. `llm.py` is the small Ollama client the director uses.
 
+## Use Hyper3D Rodin instead of Hunyuan3D
+
+`rodin.py` sends one to five pictures (or a text prompt) to Hyper3D Rodin, a paid hosted service, and downloads the
+textured model it makes. Its meshes are usually cleaner than Hunyuan3D's and come with a full texture, but each
+one costs credits and the pictures leave the machine.
+
+```
+python rodin.py --balance                                            # free: credits left
+python rodin.py <out>/props/armchair/source.png --out <out>/rodin/armchair --faces 8000
+python rodin.py --text "a chunky toy armchair, lilac velvet" --out <out>/rodin/armchair
+```
+
+**API generation needs a Business or Enterprise plan.** On a lower plan the balance check works but a generation
+fails with `API_NO_ACTIVE_SUBSCRIPTION`. Set the key with `RODIN_API_KEY`, or point `rodin.key_file` in
+`forge.json` (or `RODIN_KEY_FILE`) at a file outside the repository. `rodin.tier` sets the default tier
+(`Gen-2.5-Medium`; about 0.5 credits a model). Ask before a batch: every model costs money.
+
 ## Make wall art
 
 ```
@@ -121,6 +138,7 @@ Each job has a `theme`, `name`, `prompt`, `seed` and a `frame` (`main` 896 × 10
 | `comfy_3d.py` | Python | Image to mesh with Hunyuan3D 2 |
 | `pick_source.py` | Python | Several seeds, keeps the most symmetric picture |
 | `director.py`, `llm.py` | Python | A brief in, a judged prop out, with a local model in Ollama planning and judging |
+| `rodin.py` | Python | Pictures or text to a textured model with Hyper3D Rodin (paid, hosted; API needs a Business plan) |
 | `art_run.py` | Python | Wall art |
 | `blender_lowpoly.py` | Blender | Cleans the mesh, reduces it, projects the picture as its texture, normalises it |
 | `blender_render.py` | Blender | A review sheet: `blender -b -P blender_render.py -- IN.glb OUT.png --views 4` |

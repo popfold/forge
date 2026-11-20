@@ -6,5 +6,9 @@
     "url": "http://127.0.0.1:11434",
     "model": "hf.co/Qwen/Qwen3-VL-8B-Instruct-GGUF:Q4_K_M",
     "banned": []
+  },
+  "rodin": {
+    "key_file": "",
+    "tier": "Gen-2.5-Medium"
   }
 }
