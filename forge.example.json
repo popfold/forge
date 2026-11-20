@@ -1,0 +1,10 @@
+{
+  "comfy_url": "http://127.0.0.1:8188",
+  "blender": "C:/Program Files/Blender Foundation/Blender 5.3/blender.exe",
+  "out": "../forge-out",
+  "llm": {
+    "url": "http://127.0.0.1:11434",
+    "model": "hf.co/Qwen/Qwen3-VL-8B-Instruct-GGUF:Q4_K_M",
+    "banned": []
+  }
+}

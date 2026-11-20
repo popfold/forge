@@ -1,0 +1,13 @@
+[
+ {
+  "name": "armchair",
+  "prompt": "toy armchair, lilac velvet with a scalloped shell-shaped back, butter yellow seat cushion, short gold legs",
+  "seed": 101
+ },
+ {
+  "name": "mushroom-lamp",
+  "prompt": "toy mushroom table lamp, glossy hot pink dome shade on a chunky cream stem with a round base",
+  "seed": 102,
+  "tris": 1500
+ }
+]

@@ -1,0 +1,145 @@
+# Forge: the model pipeline
+
+Scripts that make Popfold props and wall art with local AI models and Blender. A prompt goes in, a low-poly
+textured `.glb` that follows Popfold's prop convention comes out.
+
+> **Alpha.** These are working scripts, not a polished tool. They were written on Windows with one GPU.
+
+```
+prompt ── FLUX ──▶ picture ── rembg ──▶ cut-out ── Hunyuan3D 2 ──▶ dense mesh ── Blender ──▶ low-poly .glb + review sheet
+```
+
+## What you need
+
+| Thing | Notes |
+|---|---|
+| ComfyUI, running | With `flux1-schnell-fp8.safetensors` and `hunyuan3d-dit-v2.safetensors` in `models/checkpoints/` (`sd_xl_base_1.0.safetensors` too, for tileable patterns). A 12 GB GPU is enough. |
+| Blender 4.2 or newer | Tested on 5.3. |
+| Python 3 | With the packages in `requirements.txt`. ComfyUI's own virtual environment already has most of them. |
+| Ollama (optional) | A local vision language model for `director.py`. Tested with Qwen3-VL 8B (5.8 GB): `ollama pull hf.co/Qwen/Qwen3-VL-8B-Instruct-GGUF:Q4_K_M`, then set `llm.model` to that name. |
+
+Check the licence of each model before you publish or sell what it makes. They differ.
+
+## Settings
+
+Copy `forge.example.json` to `forge.json` (not committed) and edit it, or set environment variables:
+
+| Setting | Environment variable | Default |
+|---|---|---|
+| `comfy_url` | `COMFY_URL` | `http://127.0.0.1:8188` |
+| `blender` | `POPFOLD_BLENDER` | `blender` (on PATH) |
+| `out` | `POPFOLD_FORGE_OUT` | `forge-out` in the current folder |
+| `llm.url` | `OLLAMA_URL` | `http://127.0.0.1:11434` |
+| `llm.model` | `POPFOLD_LLM_MODEL` | none |
+
+`config.py` reads them. Keep the output folder outside any site: copy only the finished `.glb` into
+`<site>/public/models/props/`.
+
+## Make props
+
+Run from this folder, with ComfyUI running:
+
+```
+python asset_pipeline.py jobs/example-props.json                 # every asset in the file
+python asset_pipeline.py jobs/example-props.json mushroom-lamp   # one asset
+python asset_pipeline.py assets.json --from-image                # keep the pictures, redo mesh and Blender
+python asset_pipeline.py assets.json --from-mesh                 # redo only the Blender step
+python asset_pipeline.py assets.json --style=refined
+```
+
+Each asset lands in `<out>/props/<name>/`: `source.png` (the picture), `prepared.png` and `mask.png` (the cut-out),
+`raw.glb` (the dense mesh), `<name>.glb` (the finished prop), `review.png` (four views) and `log.json` (timings).
+**Look at `review.png` before using a prop.**
+
+A job file is a list:
+
+```json
+[{ "name": "armchair", "prompt": "toy armchair, lilac velvet, short gold legs", "seed": 101, "tris": 2500 }]
+```
+
+| Field | Meaning |
+|---|---|
+| `name` | File name of the prop (lowercase, dashes) |
+| `prompt` | The object. The style adds the rest |
+| `seed` | Change it to get a different picture |
+| `tris` | Triangle budget (default from the style) |
+| `style` | A file in `styles/` (default `toy`) |
+| `raw_prompt` | A complete prompt, skipping the style |
+| `flat`, `depth` | For thin wall pieces |
+| `fill` | Keep pale glass or panels the cut-out removed |
+| `palette`, `colours` | Flat colours per part instead of the projected picture |
+
+`pick_source.py assets.json --out=DIR --seeds=4 name` draws several pictures and keeps the most front-on one.
+
+### Styles
+
+A style is a JSON file in `styles/`: the prompt wrapped around every subject, and a default triangle budget.
+
+```json
+{ "about": "Chunky, glossy toy furniture.", "prompt": "single {subject}, chunky stylised toy, ... 3d render", "tris": 2500 }
+```
+
+A site can keep its own in a `styles/` folder where the script is run from; those are added to the ones here.
+One style per site is what makes forty props look like one set.
+
+## Let a local model direct it
+
+`director.py` takes a one-line brief instead of a job file. A vision model in Ollama plans the job, picks the best
+of several pictures, judges the finished `review.png`, and retries with a new subject or mesh settings on a fail.
+
+```
+python director.py "a chunky mint-green bedside lamp shaped like a mushroom, cream stem" --style toy
+python director.py "..." --rounds 3 --seeds 3 --pass 8 --name mushroom-lamp
+python director.py --judge <out>/props/mushroom-lamp "the brief"     # judge an existing review.png only
+```
+
+It writes the usual files plus `candidates/` (every picture and review sheet) and `director.json` (every plan,
+pick and verdict). A pass needs the model's own pass **and** a score of at least `--pass`: the model is lenient
+and will pass a prop it has just listed problems for. It still does not replace looking at `review.png`.
+
+The GPU is shared: each model call frees ComfyUI's models first, and Ollama unloads the language model as soon as
+it answers. One prop takes about two minutes a round on a 12 GB card.
+
+`llm.banned` in `forge.json` is a list of words (brand or character names) that must never reach a prompt; a plan
+that uses one is sent back. `llm.py` is the small Ollama client the director uses.
+
+## Make wall art
+
+```
+python art_run.py jobs/example-art.json
+```
+
+Each job has a `theme`, `name`, `prompt`, `seed` and a `frame` (`main` 896 × 1088, `square` 1024 × 1024,
+`small` 832 × 1152) or its own `width` and `height`. Pictures land in `<out>/art/<theme>/raw/`.
+
+## The scripts
+
+| Script | Runs in | Does |
+|---|---|---|
+| `asset_pipeline.py` | Python | The whole chain for a list of assets, one phase at a time so the GPU loads each model once |
+| `comfy_run.py` | Python | Text to image through ComfyUI's HTTP API (FLUX schnell or SDXL; `"tile": true` for seamless patterns) |
+| `comfy_3d.py` | Python | Image to mesh with Hunyuan3D 2 |
+| `pick_source.py` | Python | Several seeds, keeps the most symmetric picture |
+| `director.py`, `llm.py` | Python | A brief in, a judged prop out, with a local model in Ollama planning and judging |
+| `art_run.py` | Python | Wall art |
+| `blender_lowpoly.py` | Blender | Cleans the mesh, reduces it, projects the picture as its texture, normalises it |
+| `blender_render.py` | Blender | A review sheet: `blender -b -P blender_render.py -- IN.glb OUT.png --views 4` |
+| `ortho_views.py` | Blender | Front, side, top and back with a measuring grid |
+| `blender_assemble.py` | Blender | Joins parts into one animated `.glb` from a JSON spec |
+| `scan_cut.py`, `scan_clean.py` | Blender | Clean up a phone scan |
+| `start-comfyui.ps1`, `stop-comfyui.ps1` | PowerShell | Start and stop ComfyUI (set `COMFYUI_DIR`) |
+| `config.py` | Python | Settings |
+
+The workflow graphs sent to ComfyUI are built in code (`workflow()` in `comfy_run.py` and `comfy_3d.py`), not
+loaded from saved workflow files.
+
+## What goes wrong
+
+- **Thin parts** (cords, wires, slim legs) come out lumpy or vanish. Ask for thick, solid parts, or build the
+  piece by hand in Blender.
+- **The back is a guess.** The mesh model sees only the front, and the texture is the front picture projected
+  through.
+- **Pairs never match.** Mirror one model; do not generate two.
+- **One GPU job at a time.** Do not start a second batch while one runs.
+
+More on choosing between this and the other ways to get a model: the repository's `docs/models.md`.
