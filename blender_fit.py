@@ -48,18 +48,29 @@ crop = mask[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
 G = 96
 target = crop[((np.arange(G) + 0.5) / G * crop.shape[0]).astype(int)][:, ((np.arange(G) + 0.5) / G * crop.shape[1]).astype(int)]
 verts = np.empty(len(me.vertices) * 3); me.vertices.foreach_get("co", verts); verts = verts.reshape(-1, 3)
-# fill the silhouette from the faces, not just the vertices, so a low-poly model has no gaps
-tri = np.empty(sum(len(p.vertices) for p in me.polygons), dtype=np.int64); me.polygons.foreach_get("vertices", tri)
-pts = np.concatenate([verts, verts[tri.reshape(-1, 3)].mean(1)]) if len(tri) % 3 == 0 else verts
+# the silhouette is every triangle filled in: sampling only vertices left a 1000-triangle sideboard's big flat
+# faces empty, and a good model scored 0.17
+me.calc_loop_triangles()
+tri = np.empty(len(me.loop_triangles) * 3, dtype=np.int64); me.loop_triangles.foreach_get("vertices", tri)
+tri = tri.reshape(-1, 3)
+cy, cx = np.mgrid[0:G, 0:G] + 0.5
 
 
-def close(grid):
-    # Blender's Python has no scipy: a small dilation then erosion fills pinholes between sample points
-    g = grid.copy()
-    for _ in range(2):
-        g = g | np.roll(g, 1, 0) | np.roll(g, -1, 0) | np.roll(g, 1, 1) | np.roll(g, -1, 1)
-    for _ in range(2):
-        g = g & np.roll(g, 1, 0) & np.roll(g, -1, 0) & np.roll(g, 1, 1) & np.roll(g, -1, 1)
+def silhouette(u, v):
+    """Rasterise the triangles, projected to (u across, v down), onto a G x G grid fitted to their bounds."""
+    x = (u - u.min()) / (np.ptp(u) + 1e-9) * G; y = (v.max() - v) / (np.ptp(v) + 1e-9) * G
+    g = np.zeros((G, G), bool)
+    for a, b, c in tri:
+        xs, ys = x[[a, b, c]], y[[a, b, c]]
+        x0, x1 = int(max(0, xs.min())), int(min(G - 1, xs.max())); y0, y1 = int(max(0, ys.min())), int(min(G - 1, ys.max()))
+        px, py = cx[y0:y1 + 1, x0:x1 + 1], cy[y0:y1 + 1, x0:x1 + 1]
+        d = (ys[1] - ys[2]) * (xs[0] - xs[2]) + (xs[2] - xs[1]) * (ys[0] - ys[2])
+        if abs(d) < 1e-12:
+            g[np.clip(ys.astype(int), 0, G - 1), np.clip(xs.astype(int), 0, G - 1)] = True  # edge-on: mark its corners
+            continue
+        l1 = ((ys[1] - ys[2]) * (px - xs[2]) + (xs[2] - xs[1]) * (py - ys[2])) / d
+        l2 = ((ys[2] - ys[0]) * (px - xs[2]) + (xs[0] - xs[2]) * (py - ys[2])) / d
+        g[y0:y1 + 1, x0:x1 + 1] |= (l1 >= -0.02) & (l2 >= -0.02) & (1 - l1 - l2 >= -0.02)
     return g
 
 
@@ -67,11 +78,8 @@ img_aspect = crop.shape[1] / crop.shape[0]
 best = None
 for name, right in {"+X": (1, 0, 0), "-X": (-1, 0, 0), "+Y": (0, 1, 0), "-Y": (0, -1, 0)}.items():
     r = np.array(right, float)
-    u = pts @ r; v = pts[:, 2]
-    un = (u - u.min()) / (np.ptp(u) + 1e-9); vn = (v.max() - v) / (np.ptp(v) + 1e-9)
-    g = np.zeros((G, G), bool)
-    g[np.clip((vn * G).astype(int), 0, G - 1), np.clip((un * G).astype(int), 0, G - 1)] = True
-    g = close(g)
+    u = verts @ r; v = verts[:, 2]
+    g = silhouette(u, v)
     # a side and its opposite give mirror-image silhouettes; the picture's asymmetry tells them apart
     iou = (g & target).sum() / max(1, (g | target).sum())
     aspect = np.ptp(u) / (np.ptp(v) + 1e-9)

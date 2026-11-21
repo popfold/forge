@@ -55,9 +55,10 @@ GATES = {
     "white": 0.90,           # this share of the picture's border is near white (a soft floor shadow is fine)
     # the mesh's front silhouette overlaps the picture's this much. TRELLIS.2's is lower for a good model: it
     # rests objects as they would stand (a donut lies flat) and thin legs barely register on the coarse grid
-    "front_iou": {"hunyuan": 0.55, "trellis": 0.35},
+    "front_iou": {"hunyuan": 0.55, "trellis": 0.45},
     "pick": 5,               # the model's lowest acceptable picture score (0-10)
 }
+FIGURE_TRIS = 3000           # a character, animal or person: at 1000-1500 a standing figure looks faceted
 
 RULES = """You plan 3D props for a stylised miniature house. The pipeline: an image model draws the object from the
 front on white, a mesh model turns that picture into a 3D model, and it is reduced to low poly.
@@ -70,9 +71,10 @@ see-through glass, text, and anything that only reads from the side. Make thin p
 Never name a brand, product line, company, franchise, character or real person, and never ask to copy an
 existing design: describe shapes and colours instead. Our own designs only."""
 
-PLAN = {"type": "object", "required": ["subject", "tris", "checks"], "properties": {
+PLAN = {"type": "object", "required": ["subject", "tris", "figure", "checks"], "properties": {
     "subject": {"type": "string", "maxLength": 220},
     "tris": {"type": "integer", "minimum": 600, "maximum": 6000},
+    "figure": {"type": "boolean", "description": "true for a character, creature, animal or person figure; false for furniture and objects"},
     "checks": {"type": "array", "items": {"type": "string", "maxLength": 120}, "maxItems": 6,
                "description": "short things to look for in the finished model, from the brief"}}}
 
@@ -94,6 +96,7 @@ VERDICT = {"type": "object", "required": ["score", "passed", "problems", "redo"]
 TRELLIS_FACES = 20000    # TRELLIS.2's own output; Blender reduces it to the budget
 
 FRESH = False
+LIBRARY = config.OUT / "models"  # every model every round made, passed or not: <name>-r<round>-s<seed>.glb
 _sess = None
 
 
@@ -204,6 +207,8 @@ def plan(brief, style, seed):
         hit = banned(p["subject"])
         if p["subject"] and not hit:
             p["tris"] = max(600, min(6000, int(p["tris"])))
+            if p.get("figure"):
+                p["tris"] = max(p["tris"], FIGURE_TRIS)
             return p
         user += f"\nYour last subject used a word that is not allowed ({', '.join(hit)}). Describe it without it."
     raise SystemExit(f"the planner kept using banned words: {hit}")
@@ -375,6 +380,7 @@ def main():
     p.add_argument("--pass", dest="pass_mark", type=int, default=7)
     p.add_argument("--mesh", choices=["trellis", "hunyuan"], default="trellis",
                    help="trellis: shape and colours on every side (slower); hunyuan: shape only, the picture projected on")
+    p.add_argument("--tris", type=int, help="the triangle budget, instead of the planner's")
     p.add_argument("--fill", action="store_true", help="keep pale or see-through panels the cut-out punches out")
     p.add_argument("--fresh", action="store_true")
     a = p.parse_args()
@@ -392,6 +398,8 @@ def main():
     say = lambda s: print(s, flush=True)  # noqa: E731
 
     job = plan(brief, style, a.seed) | {"fill": a.fill}
+    if a.tris:
+        job["tris"] = max(600, min(6000, a.tris))
     log["plan"] = dict(job); save()
     say(f"plan     {name}: {job['subject']}  (tris {job['tris']}, fill {job['fill']})")
     subject, tris, pool, best = job["subject"], job["tris"], [], None
@@ -430,6 +438,12 @@ def main():
         entry["chosen"] = chosen["seed"]
         mesh = make_mesh(rdir, Path(chosen["file"]), tris, job["fill"], a.mesh)
         entry["mesh"] = mesh
+        LIBRARY.mkdir(parents=True, exist_ok=True)
+        keep = f"{name}-r{rnd}-s{chosen['seed']}"
+        shutil.copy(rdir / "prop.glb", LIBRARY / f"{keep}.glb")
+        if (rdir / "raw.glb").exists():
+            shutil.copy(rdir / "raw.glb", LIBRARY / f"{keep}-dense.glb")
+        entry["library"] = f"{keep}.glb"
         bar = GATES["front_iou"][a.mesh]
         fails = [] if (mesh.get("front_iou") or 0) >= bar else [f"front silhouette {mesh.get('front_iou')} under {bar}"]
         verdict = judge(brief, job | {"subject": subject, "tris": tris}, rdir / "review.png", a.seed + rnd, style)

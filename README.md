@@ -104,7 +104,7 @@ The script makes every decision; the model only answers questions. Each round:
 | measure | numbers | Each cut-out: one object, not cut off, 4 to 75 % of the picture, a white border (a soft floor shadow is fine), symmetry. A picture that fails is out |
 | pick | model, then a rule | The model scores the pictures; the best that passed the measures wins (ties: symmetry, then seed) |
 | mesh | the pipeline | `--mesh trellis` (default): TRELLIS.2, colours on every side. `--mesh hunyuan`: Hunyuan3D 2 and the picture projected on |
-| check | numbers, then model | The mesh's front silhouette must match the picture (IoU 0.55 for Hunyuan3D, 0.35 for TRELLIS.2); then the model scores `review.png` against the brief and the style's `about`. A pass needs both, and a score of `--pass` or more |
+| check | numbers, then model | The mesh's front silhouette must match the picture (IoU 0.55 for Hunyuan3D, 0.45 for TRELLIS.2); then the model scores `review.png` against the brief and the style's `about`. A pass needs both, and a score of `--pass` or more |
 | next | a rule | A wrong drawing: the model rewrites the subject, new seeds. A poor mesh: the next-best picture and 1.5x the triangles |
 
 The bars are `GATES` at the top of `forge.py`.
@@ -127,8 +127,9 @@ What tuning them taught us (keep these in mind before changing a bar or a prompt
   finished models with 10/10. The measures and the tie-break (symmetry, then seed) do the real choosing; read
   every `review.png` yourself.
 - **The planner's triangle budget is low for round things and figures.** It asks for about 1000; a chair with legs
-  holds up at that, but a curved shell looks faceted and a standing figure needs 1500 to 3000. The retry
-  rule raises it 1.5x a round.
+  holds up at that, but a curved shell looks faceted and a standing figure needs 3000. The plan now says whether
+  the brief is a figure (a character, creature, animal or person), and a figure gets at least `FIGURE_TRIS` (3000).
+  `--tris N` sets any budget directly. The retry rule raises it 1.5x a round.
 
 **Repeatable.** Every step is keyed by a hash of what goes into it: the prompt, the seed, the input files, the
 scripts that do the work and the language model's digest. A step whose key matches what is on disk is skipped.
@@ -141,7 +142,9 @@ It writes `<out>/props/<name>/` (`<name>` from `--name`, or the brief's first wo
 round's candidate pictures, cut-out, meshes and sheet, `progress/` (one labelled picture per stage, in order: the
 candidates with their scores and which won, then the cut-out beside the model's sheet and verdict; it prints each
 path as it writes it), the chosen `<name>.glb` and `review.png`, and `run.json`
-(every input, measure, score and decision, and the versions used). When no round passes, the best round is still
+(every input, measure, score and decision, and the versions used). Every round's model, passed or not, is also
+copied to `<out>/models/<name>-r<round>-s<seed>.glb`, with TRELLIS.2's dense original beside it as `...-dense.glb`,
+so nothing made is lost when a later run reuses the folder. When no round passes, the best round is still
 kept and `run.json` says it did not pass. **Look at `review.png` before using a prop.**
 
 `llm.banned` in `forge.json` is a list of words (brand or character names) that must never reach a prompt: a
@@ -186,6 +189,9 @@ What we found on a 12 GB card (RTX 4070 SUPER):
 - **It is slow, and the upsample resolution decides how slow.** The template's `target_resolution` 1536 took about
   45 s a step (8 minutes for 12 steps) and the colour decode then filled all 12 GB; the whole job took 25 minutes.
   `comfy_trellis.py` uses 1024, which is plenty for a prop decimated to a few thousand faces.
+- **Fill the triangles when you compare silhouettes.** The first `blender_fit.py` sampled only vertices and face
+  centres: a good 1000-triangle sideboard scored 0.17 because its big flat faces left the silhouette empty. It now
+  fills every triangle, and good models score 0.58 to 0.97.
 - **It decides how an object rests.** A donut drawn face-on comes back lying flat, as a real one would. The front
   silhouette then matches the picture less well (about 0.63) though the model is right, so the IoU gate is a
   sanity check, not a measure of quality.
