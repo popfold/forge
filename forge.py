@@ -71,10 +71,12 @@ see-through glass, text, and anything that only reads from the side. Make thin p
 Never name a brand, product line, company, franchise, character or real person, and never ask to copy an
 existing design: describe shapes and colours instead. Our own designs only."""
 
-PLAN = {"type": "object", "required": ["subject", "tris", "figure", "checks"], "properties": {
+PLAN = {"type": "object", "required": ["subject", "tris", "figure", "shape", "checks"], "properties": {
     "subject": {"type": "string", "maxLength": 220},
     "tris": {"type": "integer", "minimum": 600, "maximum": 6000},
     "figure": {"type": "boolean", "description": "true for a character, creature, animal or person figure; false for furniture and objects"},
+    "shape": {"type": "string", "enum": ["tall", "wide", "square"],
+              "description": "the object's outline seen from the front: tall (a floor lamp, a person), wide (a sofa, a sideboard) or square"},
     "checks": {"type": "array", "items": {"type": "string", "maxLength": 120}, "maxItems": 6,
                "description": "short things to look for in the finished model, from the brief"}}}
 
@@ -254,15 +256,21 @@ def judge(brief, job, sheet, seed, style):
 
 # ---------- the GPU steps ----------
 
-def draw(folder, prompt, seed):
+# The picture's own shape: on a square canvas FLUX drew "a tall floor lamp, as tall as a person" as a table lamp
+# eight times in a row. A tall canvas lets a tall thing be tall.
+CANVAS = {"tall": (768, 1344), "wide": (1344, 768), "square": (1024, 1024)}
+
+
+def draw(folder, prompt, seed, shape="square"):
     out = folder / f"s{seed}.png"
+    w, h = CANVAS[shape]
 
     def go():
         comfy_run.OUT = folder
-        r = comfy_run.run({"name": f"s{seed}", "model": "flux", "seed": seed, "prompt": prompt})
+        r = comfy_run.run({"name": f"s{seed}", "model": "flux", "seed": seed, "prompt": prompt, "width": w, "height": h})
         return {"seconds": r["seconds"]}
-    step(folder, f"draw-s{seed}", {"prompt": prompt, "seed": seed, "ckpt": comfy_run.MODELS["flux"], "code": CODE["comfy_run.py"]},
-         [out], go)
+    step(folder, f"draw-s{seed}", {"prompt": prompt, "seed": seed, "size": [w, h], "ckpt": comfy_run.MODELS["flux"],
+                                   "code": CODE["comfy_run.py"]}, [out], go)
     return out
 
 
@@ -378,6 +386,7 @@ def main():
     p.add_argument("--mesh", choices=["trellis", "hunyuan"], default="trellis",
                    help="trellis: shape and colours on every side (slower); hunyuan: shape only, the picture projected on")
     p.add_argument("--tris", type=int, help="the triangle budget, instead of the planner's")
+    p.add_argument("--shape", choices=list(CANVAS), help="the picture's shape, instead of the planner's")
     p.add_argument("--fill", action="store_true", help="keep pale or see-through panels the cut-out punches out")
     p.add_argument("--fresh", action="store_true")
     a = p.parse_args()
@@ -397,8 +406,9 @@ def main():
     job = plan(brief, style, a.seed) | {"fill": a.fill}
     if a.tris:
         job["tris"] = max(600, min(6000, a.tris))
+    job["shape"] = a.shape or job.get("shape") or "square"
     log["plan"] = dict(job); save()
-    say(f"plan     {name}: {job['subject']}  (tris {job['tris']}, fill {job['fill']})")
+    say(f"plan     {name}: {job['subject']}  (tris {job['tris']}, {job['shape']} picture, fill {job['fill']})")
     subject, tris, pool, best = job["subject"], job["tris"], [], None
     for rnd in range(1, a.rounds + 1):
         rdir = d / f"r{rnd}"; rdir.mkdir(exist_ok=True)
@@ -407,7 +417,7 @@ def main():
         if not pool:  # draw, measure, pick
             prompt = style["prompt"].format(subject=subject)
             seeds = [a.seed * 1000 + rnd * 10 + k for k in range(a.seeds)]
-            files = [draw(rdir / "candidates", prompt, s) for s in seeds]
+            files = [draw(rdir / "candidates", prompt, s, job["shape"]) for s in seeds]
             meas = [step(rdir / "candidates", f"measure-s{s}", {"img": fhash(f), "gates": GATES}, [f], lambda f=f: measure(f))
                     for s, f in zip(seeds, files)]
             scores = pick(brief, subject, files, a.seed + rnd, style)

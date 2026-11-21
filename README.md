@@ -113,9 +113,10 @@ What tuning them taught us (keep these in mind before changing a bar or a prompt
 
 - **A small model writes rules into a subject.** Qwen3-VL 8B wrote "no hole" into a donut and the picker then
   marked every real donut down. Prompt wording did not stop it; `positive()` drops such clauses in code.
-- **A picture has no scale, so say the proportions.** "A floor lamp" alone came back as four table lamps: on a white
-  background a short lamp and a tall one look alike. Say how parts compare ("a pole three times the height of its
-  shade", "as tall as a person").
+- **A picture has no scale, and a square canvas makes things short.** "A floor lamp" came back as four table lamps,
+  and so did "a tall floor-standing lamp, as tall as a person, its pole three times the height of its shade", in
+  two rounds more. The plan now says the object's outline (`tall`, `wide` or `square`) and FLUX draws on a canvas of
+  that shape (768 x 1344, 1344 x 768, 1024 x 1024); `--shape` overrides it.
 - **Pick the style for the object.** `toy` makes everything chunky and rounded; mid-century chairs came out as
   toddler furniture until they were drawn in `refined`.
 - **The judge and the picker must know the style.** Told to judge "a prop in a toy house", the judge failed a good
