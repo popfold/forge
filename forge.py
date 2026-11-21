@@ -319,7 +319,7 @@ def make_mesh(rdir, source, tris, fill, engine="trellis"):
             # mesh, bake the colours onto it, and let Blender reduce it to the budget in the fit step
             r = comfy_trellis.run(rdir / "prepared.png", faces=TRELLIS_FACES, mask=rdir / "mask.png")
             Path(r["file"]).replace(rdir / "raw.glb")
-            return {"seconds": r["seconds"], "peak_vram_mib": r["peak_vram_mib"]}
+            return {"seconds": r["seconds"], "peak_vram_mib": r["peak_vram_mib"], "fine": r["fine"]}
         step(rdir, "trellis", {"prepared": fhash(rdir / "prepared.png"), "mask": fhash(rdir / "mask.png"),
                                "faces": TRELLIS_FACES, "files": comfy_trellis.FILES,
                                "code": CODE["comfy_trellis.py"]}, [rdir / "raw.glb"], trellis)

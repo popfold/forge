@@ -224,6 +224,10 @@ What we found on a 12 GB card (RTX 4070 SUPER):
   the coral base; the model came back a ball, and its silhouette matched the (wrong) cut-out at 0.96, so no measure
   caught it. `keep_pale_parts()` in `asset_pipeline.py` now adds back any region outside the cut-out that has some
   colour (not the grey of a floor shadow), touches the object and is at least 3 % of its size.
+- **Some objects are too big to decode finely on 12 GB.** A stack of folded towels built a sparse structure whose fine
+  shape decode asked for 14.3 GB; once it aborted ComfyUI outright, once it failed cleanly. On out of memory,
+  `comfy_trellis.run()` frees ComfyUI's models and tries once more without the finer pass (shape and colours from the
+  first shape stage). `run.json` records which path a model took (`"fine": false`).
 - **Cut the picture once.** TRELLIS.2's graph runs its own background removal (BiRefNet), which cut a round mirror's
   pale glass away after our cut-out had kept it: the model was a bare ring (the silhouette gate caught it at 0.35;
   the judge gave it 10/10). `forge.py` now sends our cut-out as the picture's alpha

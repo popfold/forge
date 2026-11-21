@@ -36,12 +36,12 @@ FILES = {
 }
 
 
-def workflow(image_name, name, faces=3000, texture=1024, seed=42, background="#000000", own_mask=False):
+def workflow(image_name, name, faces=3000, texture=1024, seed=42, background="#000000", own_mask=False, fine=True):
     n = lambda cls, **inputs: {"class_type": cls, "inputs": inputs}  # noqa: E731
     ks = lambda model, cond, seed, steps, cfg, scheduler="normal": n(  # noqa: E731
         "KSampler", model=model, positive=[cond, 0], negative=[cond, 1], latent_image=[cond, 2], seed=seed, steps=steps,
         cfg=cfg, sampler_name="euler", scheduler=scheduler, denoise=1.0)
-    return {
+    graph = {
         "img": n("LoadImage", image=image_name),
         # own_mask: the picture's alpha is our cut-out (LoadImage gives 1 - alpha, so invert it). Without it BiRefNet
         # cuts the picture again, and it removed a mirror's pale glass that our cut-out had kept
@@ -91,6 +91,12 @@ def workflow(image_name, name, faces=3000, texture=1024, seed=42, background="#0
         "painted": n("ApplyTextureToMesh", mesh=["uv", 0], base_color=["bake", 0], metallic=["bake", 1], roughness=["bake", 2]),
         "save": n("SaveGLB", mesh=["painted", 0], filename_prefix="popfold3d/" + name),
     }
+    if not fine:  # no finer pass: shape and colours from the first shape stage (see run())
+        g = graph
+        del g["up"], g["s_up"]
+        g["mesh"]["inputs"]["samples"] = ["s_shape", 0]
+        g["tex"]["inputs"] |= {"positive": ["shape", 0], "negative": ["shape", 1], "shape_latent": ["s_shape", 0]}
+    return graph
 
 
 def run(path: Path, faces=3000, texture=1024, seed=42, timeout=5400, background="#000000", mask=None):
@@ -100,22 +106,32 @@ def run(path: Path, faces=3000, texture=1024, seed=42, timeout=5400, background=
         rgba = Image.open(path).convert("RGB"); rgba.putalpha(Image.open(mask).convert("L").resize(rgba.size))
         path = path.with_name(f"{path.stem}-cut.png"); rgba.save(path)
     image_name = upload(path)
-    watch = VramWatch(); watch.start()
-    t0 = time.time()
-    r = api("/prompt", {"prompt": workflow(image_name, name, faces, texture, seed, background, own_mask=bool(mask)), "client_id": str(uuid.uuid4())})
-    if r.get("node_errors"):
-        raise RuntimeError(f"{name}: ComfyUI refused the graph: {json.dumps(r['node_errors'])[:1500]}")
-    pid = r["prompt_id"]
-    while True:
-        h = api(f"/history/{pid}")
-        if pid in h:
-            entry = h[pid]; break
-        if time.time() - t0 > timeout:
-            raise RuntimeError(f"{name}: not done after {timeout} s")
-        time.sleep(2)
-    secs = time.time() - t0; watch.stop = True
-    if entry.get("status", {}).get("status_str") != "success":
-        raise RuntimeError(f"{name} failed: {json.dumps(entry.get('status'))[:1500]}")
+    # Some objects build a sparse structure too big to decode at the finer resolution on a 12 GB card: a towel stack
+    # asked for 14.3 GB and once aborted ComfyUI outright. Out of memory, free ComfyUI's models and try once more
+    # without the finer pass. The rule is fixed, so the same picture always takes the same path.
+    for fine in (True, False):
+        watch = VramWatch(); watch.start()
+        t0 = time.time()
+        r = api("/prompt", {"prompt": workflow(image_name, name, faces, texture, seed, background, own_mask=bool(mask),
+                                               fine=fine), "client_id": str(uuid.uuid4())})
+        if r.get("node_errors"):
+            raise RuntimeError(f"{name}: ComfyUI refused the graph: {json.dumps(r['node_errors'])[:1500]}")
+        pid = r["prompt_id"]
+        while True:
+            h = api(f"/history/{pid}")
+            if pid in h:
+                entry = h[pid]; break
+            if time.time() - t0 > timeout:
+                raise RuntimeError(f"{name}: not done after {timeout} s")
+            time.sleep(2)
+        secs = time.time() - t0; watch.stop = True
+        status = entry.get("status", {})
+        if status.get("status_str") == "success":
+            break
+        if fine and "out of memory" in json.dumps(status).lower():
+            api("/free", {"unload_models": True, "free_memory": True})
+            continue
+        raise RuntimeError(f"{name} failed: {json.dumps(status)[:1500]}")
     OUT.mkdir(parents=True, exist_ok=True)
     saved = ""
     for node in entry["outputs"].values():
@@ -128,7 +144,7 @@ def run(path: Path, faces=3000, texture=1024, seed=42, timeout=5400, background=
                     saved = str(dest)
     if not saved:
         raise RuntimeError(f"{name}: ComfyUI saved no .glb")
-    return {"name": name, "seconds": round(secs, 1), "peak_vram_mib": watch.peak, "file": saved}
+    return {"name": name, "seconds": round(secs, 1), "peak_vram_mib": watch.peak, "file": saved, "fine": fine}
 
 
 if __name__ == "__main__":
