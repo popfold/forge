@@ -36,7 +36,7 @@ FILES = {
 }
 
 
-def workflow(image_name, name, faces=3000, texture=1024, seed=42):
+def workflow(image_name, name, faces=3000, texture=1024, seed=42, background="#000000"):
     n = lambda cls, **inputs: {"class_type": cls, "inputs": inputs}  # noqa: E731
     ks = lambda model, cond, seed, steps, cfg, scheduler="normal": n(  # noqa: E731
         "KSampler", model=model, positive=[cond, 0], negative=[cond, 1], latent_image=[cond, 2], seed=seed, steps=steps,
@@ -46,7 +46,7 @@ def workflow(image_name, name, faces=3000, texture=1024, seed=42):
         "bgm": n("LoadBackgroundRemovalModel", bg_removal_name=FILES["cutout"]),
         "mask": n("RemoveBackground", bg_removal_model=["bgm", 0], image=["img", 0]),
         "crop": n("ImageCropToMask", images=["img", 0], masks=["mask", 0], width=1024, height=1024, pad_factor=1.0,
-                  grow_mask=0, background="#000000"),
+                  grow_mask=0, background=background),
         "vis": n("CLIPVisionLoader", clip_name=FILES["vision"]),
         "cond": n("Trellis2Conditioning", clip_vision_model=["vis", 0], image=["crop", 0]),
         "unet": n("UNETLoader", unet_name=FILES["unet"], weight_dtype="default"),
@@ -90,12 +90,12 @@ def workflow(image_name, name, faces=3000, texture=1024, seed=42):
     }
 
 
-def run(path: Path, faces=3000, texture=1024, seed=42, timeout=5400):
+def run(path: Path, faces=3000, texture=1024, seed=42, timeout=5400, background="#000000"):
     name = path.stem
     image_name = upload(path)
     watch = VramWatch(); watch.start()
     t0 = time.time()
-    r = api("/prompt", {"prompt": workflow(image_name, name, faces, texture, seed), "client_id": str(uuid.uuid4())})
+    r = api("/prompt", {"prompt": workflow(image_name, name, faces, texture, seed, background), "client_id": str(uuid.uuid4())})
     if r.get("node_errors"):
         raise RuntimeError(f"{name}: ComfyUI refused the graph: {json.dumps(r['node_errors'])[:1500]}")
     pid = r["prompt_id"]
