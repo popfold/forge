@@ -210,6 +210,10 @@ What we found on a 12 GB card (RTX 4070 SUPER):
 - **Thin radiating parts still fail.** A sunburst wall clock's brass rays came back spiky and melted into the face
   in three rounds, from 3000 to 6000 triangles. Chairs, tables, cabinets, a sofa, a planter and a standing figure
   all worked; for rays, spokes, wires and fine frames, build the part in Blender (`blender_assemble.py`).
+- **Pale parts on white get cut away.** rembg took a table lamp's cream shade for the white background and kept only
+  the coral base; the model came back a ball, and its silhouette matched the (wrong) cut-out at 0.96, so no measure
+  caught it. `keep_pale_parts()` in `asset_pipeline.py` now adds back any region outside the cut-out that has some
+  colour (not the grey of a floor shadow), touches the object and is at least 3 % of its size.
 - **Chrome reads as see-through or white.** A kitchen stool's thick chrome legs came back transparent, then white
   and rod-thin, and its footrest ring merged into them, three rounds running. Mirror finishes reflect the white
   background, so the cut-out and the model treat them like glass. Ask for painted metal (a colour) instead.

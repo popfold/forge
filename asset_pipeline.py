@@ -35,6 +35,24 @@ PALETTE = False  # --palette: flat part colours instead of the projected photo
 _session = None
 
 
+def keep_pale_parts(rgb, mask):
+    """Put back pale coloured parts the cut-out dropped. rembg took a lamp's cream shade for the white background
+    and left only its base. A region outside the cut-out that has some colour (not the grey of a floor shadow),
+    touches the object and is big enough to be a part is added back."""
+    px = rgb.astype(np.int16)
+    tinted = (px.max(-1) - px.min(-1) > 14) & (px.min(-1) < 248)   # some colour; pure white and greys stay out
+    lab, n = ndimage.label(tinted & ~mask)
+    if not n:
+        return mask
+    near = ndimage.binary_dilation(mask, iterations=4)
+    sizes = ndimage.sum(np.ones_like(lab), lab, range(1, n + 1))
+    for i in range(n):
+        part = lab == i + 1
+        if sizes[i] > mask.sum() * 0.03 and (part & near).any():
+            mask = mask | ndimage.binary_fill_holes(part)
+    return mask
+
+
 def prepare(src: Path, dst_img: Path, dst_mask: Path, size=1024, border=0.12, fill=False):
     """Cut out the object, centre it on white with a margin, and bleed its edge colours outward."""
     global _session
@@ -45,6 +63,7 @@ def prepare(src: Path, dst_img: Path, dst_mask: Path, size=1024, border=0.12, fi
     lab, n = ndimage.label(a)
     if n > 1:  # keep the largest blob only
         a = lab == (np.argmax(ndimage.sum(a, lab, range(1, n + 1))) + 1)
+    a = keep_pale_parts(np.array(Image.open(src).convert("RGB")), a)
     if fill:  # the cut-out sometimes punches out pale glass or panels; "fill": true keeps them
         a = ndimage.binary_fill_holes(a)
     ys, xs = np.where(a)
