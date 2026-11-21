@@ -163,6 +163,13 @@ the same question gets the same answer without loading the model. Running the sa
 files, the second time in seconds; a run that stopped part way picks up where it stopped. `--fresh` redoes every
 step and asks the model again. A different `--seed` gives a different prop.
 
+What repeats from scratch and what does not (tested: the same brief run twice with `--fresh`, every file
+compared): the plan, the scores, every FLUX picture, the measures, the cut-out and the mask came out identical to
+the bit. TRELLIS.2's mesh did not: its sparse 3D layers on the GPU give a slightly different mesh each run, even
+with ComfyUI started with `--deterministic` (two runs on one cut-out: 2,049,828 and 2,049,416 bytes). A small
+difference can tip the judge and send a run down another path. So a run repeats exactly from its kept steps;
+from scratch it repeats up to the picture and cut-out. Keep the files of a model you want (`<out>/models/` does).
+
 It writes `<out>/props/<name>/` (`<name>` from `--name`, or the brief's first words): `r1/`, `r2/` ... with each
 round's candidate pictures, cut-out, meshes and sheet, `progress/` (one labelled picture per stage, in order: the
 candidates with their scores and which won, then the cut-out beside the model's sheet and verdict; it prints each
