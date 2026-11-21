@@ -196,7 +196,10 @@ What we found on a 12 GB card (RTX 4070 SUPER):
   fits. A donut at 1000 triangles stays clean that way.
 - **Its colours come out darker, and greens weaker.** Teal upholstery came back navy and mustard came back orange;
   a saturated orange came through about right. It is not one fixed shift, so a single correction does not fix it.
-  Compare `review.png` with the picture's colours before using a model.
+  It is not the crop background either: the template's black gave teal (22, 58, 87) for a picture's (38, 95, 104),
+  and white (`comfy_trellis.run(..., background="#FFFFFF")`) gave a much darker (7, 29, 44). Nor is it a linear
+  versus sRGB mix-up: converting the texture overshoots far too bright. Keep black, and compare `review.png` with the
+  picture's colours before using a model.
 - **The output is already textured**, so `blender_lowpoly.py` (which re-projects the picture) is not used;
   `blender_fit.py` keeps TRELLIS.2's texture and writes it as JPEG.
 
