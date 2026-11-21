@@ -55,6 +55,7 @@
       <label><input type="radio" name="g" value="props" checked><span>Props</span></label>
       <label><input type="radio" name="g" value="library"><span>Every round</span></label>
       <label><input type="radio" name="g" value="dense"><span>Dense</span></label>
+      <label><input type="radio" name="g" value="compare"><span>Compare</span></label>
       <label><input type="radio" name="g" value="tests"><span>Tests</span></label>
     </div>
   </div>
@@ -181,7 +182,10 @@ function list() {
     el.innerHTML = `<div class="pic"><img data-i="${n}" alt=""></div><div class="t"><div class="n">${esc(i.name)}</div>` +
       `<div class="m"><span class="dot ${passed}"></span>${esc(tag)}</div></div>`;
     el.onclick = () => open(n);
-    grid.append(el); seen.observe(el.querySelector('img'));
+    const img = el.querySelector('img');
+    grid.append(el);
+    // ?thumbs draws every missing thumbnail now, seen or not (a hidden tab never reports what is on screen)
+    if (!i.has_thumb && location.search.includes('thumbs')) { queue.push({ item: i, img }); pump(); } else seen.observe(img);
   });
 }
 
@@ -205,7 +209,7 @@ function info(i) {
     ['Judge', i.score != null ? `${i.score}/10${i.passed ? ', passed' : ', not passed'}` : i.passed != null ? (i.passed ? 'passed' : 'not passed') : ''],
     ['Problems', (i.problems || []).join('; ')], ['Gates', (i.gate_fails || []).join('; ')],
     ['Front match', i.front_iou], ['Triangles', i.tris], ['Size', kb(i.bytes)], ['File', i.file]].filter((r) => r[1] !== undefined && r[1] !== null && r[1] !== '');
-  const pics = [prop.review, ...(prop.progress || [])].filter(Boolean);
+  const pics = [i.review || prop.review, ...(prop.progress || [])].filter(Boolean);
   $('#info').innerHTML = `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` +
     (pics.length ? `<div class="pics">${pics.map((p) => `<img src="${url(p)}" alt="">`).join('')}</div>` : '');
   $('#info').querySelectorAll('.pics img').forEach((im) => im.onclick = () => { $('#big img').src = im.src; $('#big').classList.add('open'); });

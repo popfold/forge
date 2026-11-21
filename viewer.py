@@ -86,6 +86,21 @@ def catalogue():
                            problems=v.get("problems", []), front_iou=mesh.get("front_iou"), tris=mesh.get("tris"),
                            passed=res.get("passed"), review=rel(d / "review.png") if (d / "review.png").exists() else None,
                            progress=pics))
+    # side-by-side trials: <out>/compare/<way>/<prop>/<prop>.glb, with its review sheet and log.json
+    for f in sorted((OUT / "compare").glob("*/*/*.glb")) if (OUT / "compare").is_dir() else []:
+        log = f.parent / "log.json"
+        try:
+            log = json.loads(log.read_text(encoding="utf-8")) if log.exists() else {}
+        except ValueError:
+            log = {}
+        way = f.parents[1].name
+        review = f.parent / "review.png"
+        prop = f.parent.name
+        items.append(entry(f, "compare", name=f"{prop} · {way}" + ("" if f.stem == prop else f" · {f.stem}"), brief=all_runs.get(log.get("prop", ""), {}).get("brief", ""),
+                           tris=log.get("triangles"), subject=f"{way}: {log.get('wall_seconds')} s"
+                           + (f", {log['credits']} credits" if log.get("credits") is not None else ""),
+                           problems=[log["notes"]] if isinstance(log.get("notes"), str) else log.get("notes", []),
+                           review=rel(review) if review.exists() else None))
     for f in sorted((OUT / "meshes").glob("*.glb")) if (OUT / "meshes").is_dir() else []:
         items.append(entry(f, "tests", name=f.stem))
     items.sort(key=lambda i: -i["mtime"])
