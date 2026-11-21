@@ -115,8 +115,10 @@ What tuning them taught us (keep these in mind before changing a bar or a prompt
   marked every real donut down. Prompt wording did not stop it; `positive()` drops such clauses in code.
 - **Pick the style for the object.** `toy` makes everything chunky and rounded; mid-century chairs came out as
   toddler furniture until they were drawn in `refined`.
-- **The judge must know the style.** Told to judge "a prop in a toy house", it failed a good refined chair for not
-  being chunky. It is given the style's `about` and told that small details do not matter at this size.
+- **The judge and the picker must know the style.** Told to judge "a prop in a toy house", the judge failed a good
+  refined chair for not being chunky, and the picker scored four good sofas 1 or 2, calling their legs thin and
+  inventing "missing back cushions". Both are given the style's `about`; the judge is told small details do not
+  matter at this size, the picker to look closely before calling a part missing.
 - **Measure the border, not the whole background.** Furniture on white casts a soft floor shadow that the cut-out
   leaves behind; checking the whole background threw out half of the good chair pictures.
 - **The silhouette bar depends on the mesh model.** See the TRELLIS.2 notes below.

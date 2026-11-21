@@ -214,11 +214,13 @@ def plan(brief, style, seed):
     raise SystemExit(f"the planner kept using banned words: {hit}")
 
 
-def pick(brief, subject, files, seed):
+def pick(brief, subject, files, seed, style):
     user = (f"Brief: {brief}\nSubject drawn: {subject}\nThese {len(files)} pictures are candidates, numbered 1 to "
             f"{len(files)} in order. Each must show exactly one object that fits the brief, whole, straight from the "
-            "front, on white, with chunky parts a mesh model can rebuild. Compare them against each other and the brief "
-            "(colours, which part is which colour, shape). Give every picture a different score; no ties.")
+            "front, on white, with parts solid enough for a mesh model to rebuild. Judge thickness against this style, "
+            f"not against toys: {style.get('about', '')} Look closely before calling a part missing. Compare them against "
+            "each other and the brief (colours, which part is which colour, shape). Give every picture a different "
+            "score; no ties.")
     # the schema asks for exactly one score per picture, numbered 1..n: left open, the model once answered with an
     # empty list and every picture counted as unusable. Still short? Ask again with the next seed.
     n = len(files)
@@ -413,7 +415,7 @@ def main():
             files = [draw(rdir / "candidates", prompt, s) for s in seeds]
             meas = [step(rdir / "candidates", f"measure-s{s}", {"img": fhash(f), "gates": GATES}, [f], lambda f=f: measure(f))
                     for s, f in zip(seeds, files)]
-            scores = pick(brief, subject, files, a.seed + rnd)
+            scores = pick(brief, subject, files, a.seed + rnd, style)
             cands = [{"seed": s, "file": str(f), "measure": m, "score": sc["score"], "problems": sc["problems"]}
                      for s, f, m, sc in zip(seeds, files, meas, scores)]
             entry["candidates"] = cands
