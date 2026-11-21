@@ -36,15 +36,18 @@ FILES = {
 }
 
 
-def workflow(image_name, name, faces=3000, texture=1024, seed=42, background="#000000"):
+def workflow(image_name, name, faces=3000, texture=1024, seed=42, background="#000000", own_mask=False):
     n = lambda cls, **inputs: {"class_type": cls, "inputs": inputs}  # noqa: E731
     ks = lambda model, cond, seed, steps, cfg, scheduler="normal": n(  # noqa: E731
         "KSampler", model=model, positive=[cond, 0], negative=[cond, 1], latent_image=[cond, 2], seed=seed, steps=steps,
         cfg=cfg, sampler_name="euler", scheduler=scheduler, denoise=1.0)
     return {
         "img": n("LoadImage", image=image_name),
-        "bgm": n("LoadBackgroundRemovalModel", bg_removal_name=FILES["cutout"]),
-        "mask": n("RemoveBackground", bg_removal_model=["bgm", 0], image=["img", 0]),
+        # own_mask: the picture's alpha is our cut-out (LoadImage gives 1 - alpha, so invert it). Without it BiRefNet
+        # cuts the picture again, and it removed a mirror's pale glass that our cut-out had kept
+        **({"mask": n("InvertMask", mask=["img", 1])} if own_mask else {
+            "bgm": n("LoadBackgroundRemovalModel", bg_removal_name=FILES["cutout"]),
+            "mask": n("RemoveBackground", bg_removal_model=["bgm", 0], image=["img", 0])}),
         "crop": n("ImageCropToMask", images=["img", 0], masks=["mask", 0], width=1024, height=1024, pad_factor=1.0,
                   grow_mask=0, background=background),
         "vis": n("CLIPVisionLoader", clip_name=FILES["vision"]),
@@ -90,12 +93,16 @@ def workflow(image_name, name, faces=3000, texture=1024, seed=42, background="#0
     }
 
 
-def run(path: Path, faces=3000, texture=1024, seed=42, timeout=5400, background="#000000"):
+def run(path: Path, faces=3000, texture=1024, seed=42, timeout=5400, background="#000000", mask=None):
     name = path.stem
+    if mask:  # send our cut-out as the picture's alpha
+        from PIL import Image
+        rgba = Image.open(path).convert("RGB"); rgba.putalpha(Image.open(mask).convert("L").resize(rgba.size))
+        path = path.with_name(f"{path.stem}-cut.png"); rgba.save(path)
     image_name = upload(path)
     watch = VramWatch(); watch.start()
     t0 = time.time()
-    r = api("/prompt", {"prompt": workflow(image_name, name, faces, texture, seed, background), "client_id": str(uuid.uuid4())})
+    r = api("/prompt", {"prompt": workflow(image_name, name, faces, texture, seed, background, own_mask=bool(mask)), "client_id": str(uuid.uuid4())})
     if r.get("node_errors"):
         raise RuntimeError(f"{name}: ComfyUI refused the graph: {json.dumps(r['node_errors'])[:1500]}")
     pid = r["prompt_id"]

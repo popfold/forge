@@ -317,10 +317,11 @@ def make_mesh(rdir, source, tris, fill, engine="trellis"):
             comfy_trellis.OUT = rdir
             # ComfyUI's decimation is quick and crude (it crumpled a chair at 1000 faces): stop at a dense
             # mesh, bake the colours onto it, and let Blender reduce it to the budget in the fit step
-            r = comfy_trellis.run(rdir / "prepared.png", faces=TRELLIS_FACES)
+            r = comfy_trellis.run(rdir / "prepared.png", faces=TRELLIS_FACES, mask=rdir / "mask.png")
             Path(r["file"]).replace(rdir / "raw.glb")
             return {"seconds": r["seconds"], "peak_vram_mib": r["peak_vram_mib"]}
-        step(rdir, "trellis", {"prepared": fhash(rdir / "prepared.png"), "faces": TRELLIS_FACES, "files": comfy_trellis.FILES,
+        step(rdir, "trellis", {"prepared": fhash(rdir / "prepared.png"), "mask": fhash(rdir / "mask.png"),
+                               "faces": TRELLIS_FACES, "files": comfy_trellis.FILES,
                                "code": CODE["comfy_trellis.py"]}, [rdir / "raw.glb"], trellis)
 
         def fit():

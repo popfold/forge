@@ -224,6 +224,10 @@ What we found on a 12 GB card (RTX 4070 SUPER):
   the coral base; the model came back a ball, and its silhouette matched the (wrong) cut-out at 0.96, so no measure
   caught it. `keep_pale_parts()` in `asset_pipeline.py` now adds back any region outside the cut-out that has some
   colour (not the grey of a floor shadow), touches the object and is at least 3 % of its size.
+- **Cut the picture once.** TRELLIS.2's graph runs its own background removal (BiRefNet), which cut a round mirror's
+  pale glass away after our cut-out had kept it: the model was a bare ring (the silhouette gate caught it at 0.35;
+  the judge gave it 10/10). `forge.py` now sends our cut-out as the picture's alpha
+  (`comfy_trellis.run(..., mask=...)`) and the graph uses that instead.
 - **Chrome reads as see-through or white.** A kitchen stool's thick chrome legs came back transparent, then white
   and rod-thin, and its footrest ring merged into them, three rounds running. Mirror finishes reflect the white
   background, so the cut-out and the model treat them like glass. Ask for painted metal (a colour) instead.
