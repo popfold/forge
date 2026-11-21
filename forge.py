@@ -202,6 +202,15 @@ def mesh_numbers(lines):
 
 # ---------- the model's questions ----------
 
+COLOURS = {"red", "orange", "yellow", "mustard", "gold", "green", "olive", "teal", "turquoise", "blue", "navy", "purple",
+           "violet", "lilac", "pink", "magenta", "brown", "walnut", "oak", "tan", "beige", "cream", "ivory", "white", "grey",
+           "gray", "black", "silver", "brass", "copper", "mint", "sage", "coral", "peach", "burgundy", "maroon", "lavender"}
+
+
+def colours(text):
+    return {w for w in re.findall(r"[a-z]+", text.lower()) if w in COLOURS}
+
+
 def plan(brief, style, seed):
     user = f"Brief: {brief}\nStyle: {style.get('about', '')}\nPlan the job."
     # a subject that drops most of the brief is no plan: asked for a walnut, cream and brass floor lamp, the model
@@ -212,10 +221,14 @@ def plan(brief, style, seed):
         p["subject"] = positive(p["subject"])
         p["checks"] = [c for c in p["checks"] if positive(c) == c.strip().rstrip(".")]
         hit = banned(p["subject"])
-        if p["subject"] and not hit and len(p["subject"].split()) >= short:
+        # colours too: a dinosaur brief's "teal green body, cream belly" once became a subject with neither, and FLUX
+        # drew grey and yellow dinosaurs
+        lost = sorted(colours(brief) - colours(p["subject"]))
+        if p["subject"] and not hit and len(p["subject"].split()) >= short and not lost:
             break
         user += (f"\nYour last subject used a word that is not allowed ({', '.join(hit)}). Describe it without it." if hit
-                 else "\nYour last subject left out most of the brief. Keep its parts, colours and materials.")
+                 else f"\nYour last subject left out the brief's colours ({', '.join(lost)}). Keep every colour and part."
+                 if lost else "\nYour last subject left out most of the brief. Keep its parts, colours and materials.")
     else:
         if hit:
             raise SystemExit(f"the planner kept using banned words: {hit}")

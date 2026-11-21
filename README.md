@@ -120,7 +120,8 @@ What tuning them taught us (keep these in mind before changing a bar or a prompt
 - **A subject that drops the brief is asked again.** Once the plan gained a `shape` field, the planner answered a
   detailed walnut, cream and brass floor lamp with just "floor-standing lamp" (and called the lamp a figure). A
   subject shorter than a third of the brief is asked for again with the next seed; after three tries the brief
-  itself is drawn.
+  itself is drawn. The same goes for colours: a dinosaur's "teal green body, cream belly" vanished from its subject
+  and FLUX drew grey and yellow ones, so every colour word in the brief (`COLOURS`) must reach the subject.
 - **Pick the style for the object.** `toy` makes everything chunky and rounded; mid-century chairs came out as
   toddler furniture until they were drawn in `refined`.
 - **The judge and the picker must know the style.** Told to judge "a prop in a toy house", the judge failed a good
