@@ -74,6 +74,13 @@
   <div id="info"></div>
 </div>
 <div id="big"><img alt=""></div>
+<script>
+  // any error shows on the page: a phone has no console to look at
+  const say = (m) => { const g = document.getElementById('grid'); if (g) g.insertAdjacentHTML('afterbegin', '<div class="empty" style="grid-column:1/-1;color:#e0736a"></div>'), g.firstChild.textContent = m; };
+  addEventListener('error', (e) => say('Error: ' + (e.message || e.target?.src || e.target?.href || 'a file did not load')), true);
+  addEventListener('unhandledrejection', (e) => say('Error: ' + (e.reason?.message || e.reason)));
+  setTimeout(() => { if (!window.__forgeReady) say('The page script did not start. This browser may lack import maps or modules.'); }, 6000);
+</script>
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -124,22 +131,28 @@ function dispose(obj) {
 }
 
 // ---- thumbnails: one small renderer, one model at a time; the picture is kept on the server ----
-const thumbR = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-thumbR.setSize(320, 320, false); thumbR.outputColorSpace = THREE.SRGBColorSpace;
-const thumbScene = stage(thumbR), thumbCam = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
+// made on first use, so the grid still lists every model where 3D is not available
+let thumbR, thumbScene, thumbCam;
+function thumbStage() {
+  if (thumbR) return;
+  thumbR = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  thumbR.setSize(320, 320, false); thumbR.outputColorSpace = THREE.SRGBColorSpace;
+  thumbScene = stage(thumbR); thumbCam = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
+}
 const queue = []; let busy = false;
 async function pump() {
   if (busy || !queue.length) return;
   busy = true;
   const { item, img } = queue.shift();
   try {
+    thumbStage();
     const gltf = await loader.loadAsync(url(item.file));
     thumbScene.add(gltf.scene); frame(gltf.scene, thumbCam); thumbR.render(thumbScene, thumbCam);
     const blob = await new Promise((ok) => thumbR.domElement.toBlob(ok, 'image/webp', 0.85));
     thumbScene.remove(gltf.scene); dispose(gltf.scene);
     img.src = URL.createObjectURL(blob); item.has_thumb = true;
     fetch('/thumbs/' + encodeURIComponent(item.thumb), { method: 'POST', body: blob }).catch(() => {});
-  } catch (e) { img.replaceWith(Object.assign(document.createElement('span'), { textContent: 'could not load' })); }
+  } catch (e) { img.replaceWith(Object.assign(document.createElement('span'), { textContent: 'no picture: ' + (e.message || e) })); }
   busy = false; pump();
 }
 const seen = new IntersectionObserver((es) => {
@@ -173,11 +186,17 @@ function list() {
 }
 
 // ---- the big view ----
-const canvas = $('#c'), R = new THREE.WebGLRenderer({ canvas, antialias: true });
-R.setPixelRatio(Math.min(devicePixelRatio, 2)); R.outputColorSpace = THREE.SRGBColorSpace;
-const scene = stage(R), camera = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
+const canvas = $('#c'), camera = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true; controls.autoRotate = true; controls.autoRotateSpeed = 1.6;
+let R, scene;
+function viewStage() {  // on first open, like the thumbnails
+  if (R) return;
+  R = new THREE.WebGLRenderer({ canvas, antialias: true });
+  R.setPixelRatio(Math.min(devicePixelRatio, 2)); R.outputColorSpace = THREE.SRGBColorSpace;
+  scene = stage(R);
+  R.setAnimationLoop(() => { if ($('#view').classList.contains('open')) { controls.update(); R.render(scene, camera); } });
+}
 let model = null, wire = false, token = 0;
 
 function info(i) {
@@ -196,7 +215,9 @@ async function open(n) {
   current = (n + shown.length) % shown.length;
   const i = shown[current], mine = ++token;
   $('#view').classList.add('open'); $('#vt').textContent = i.name + (i.group === 'library' ? ` · r${i.round} s${i.seed}` : '');
-  info(i); resize();
+  info(i);
+  try { viewStage(); } catch (e) { $('#info').classList.remove('hide'); $('#info').insertAdjacentHTML('afterbegin', `<p style="color:var(--bad)">No 3D here: ${esc(e.message || e)}</p>`); return; }
+  resize();
   if (model) { scene.remove(model); dispose(model); model = null; }
   const gltf = await loader.loadAsync(url(i.file));
   if (mine !== token) return dispose(gltf.scene);
@@ -206,11 +227,10 @@ async function open(n) {
 function close() { $('#view').classList.remove('open'); token++; history.replaceState(null, '', location.pathname); }
 function setWire() { model?.traverse((o) => { if (o.isMesh) for (const m of [o.material].flat()) m.wireframe = wire; }); }
 function resize() {
+  if (!R) return;
   const w = innerWidth, h = innerHeight; R.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
-R.setAnimationLoop(() => { if ($('#view').classList.contains('open')) { controls.update(); R.render(scene, camera); } });
-
 if (innerWidth < 700) { $('#info').classList.add('hide'); $('#inf').classList.remove('on'); }  // a phone: the model first
 $('#close').onclick = close;
 $('#prev').onclick = () => open(current - 1);
@@ -232,6 +252,7 @@ $('#info').addEventListener('touchend', (e) => {
 
 $('#q').oninput = list;
 document.querySelectorAll('#tabs input').forEach((r) => r.onchange = list);
+window.__forgeReady = true;
 all = await (await fetch('/api/models')).json();
 for (const i of all) if (i.group === 'props') byName[i.name] = i;
 list();

@@ -5,7 +5,8 @@
 Serves <out> (config.py) read-only: the library in <out>/models, each prop's final model, review sheet and
 progress pictures in <out>/props, and the test meshes in <out>/meshes. Each model is shown with what its
 run.json says about it (the brief, the judge's score and problems, the front match, triangles, size).
---host 0.0.0.0 lets a phone on the same network open it; a tunnel to the port works too. three.js comes from
+--host 0.0.0.0 lets a phone on the same network open it; a tunnel to the port works too (what comes through a
+tunnel can only read: it cannot save thumbnails). three.js comes from
 Popfold's own node_modules (run pnpm install in the Popfold folder first). Standard library only.
 
 Thumbnails are drawn by the first browser that shows a model and sent back to <out>/viewer-thumbs, so a phone
@@ -124,6 +125,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):  # a thumbnail drawn by a browser: <file with / as __>-<mtime>.webp, nothing else
         name = unquote(urlparse(self.path).path)[8:]
         n = int(self.headers.get("Content-Length", 0))
+        if self.headers.get("Cf-Connecting-IP") or self.headers.get("X-Forwarded-For"):  # through a tunnel: read only
+            return self.send_error(403)
         if not self.path.startswith("/thumbs/") or not re.fullmatch(r"[\w.\-]+\.webp", name) or not 0 < n < 2_000_000:
             return self.send_error(400)
         THUMBS.mkdir(parents=True, exist_ok=True)
