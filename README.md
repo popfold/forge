@@ -16,7 +16,7 @@ prompt ── FLUX ──▶ picture ── rembg ──▶ cut-out ── Hunyu
 | ComfyUI, running | With `flux1-schnell-fp8.safetensors` and `hunyuan3d-dit-v2.safetensors` in `models/checkpoints/` (`sd_xl_base_1.0.safetensors` too, for tileable patterns). A 12 GB GPU is enough. |
 | Blender 4.2 or newer | Tested on 5.3. |
 | Python 3 | With the packages in `requirements.txt`. ComfyUI's own virtual environment already has most of them. |
-| Ollama (optional) | A local vision language model for `director.py`. Tested with Qwen3-VL 8B (5.8 GB): `ollama pull hf.co/Qwen/Qwen3-VL-8B-Instruct-GGUF:Q4_K_M`, then set `llm.model` to that name. |
+| Ollama (optional) | A local vision language model for `forge.py`. Tested with Qwen3-VL 8B (5.8 GB): `ollama pull hf.co/Qwen/Qwen3-VL-8B-Instruct-GGUF:Q4_K_M`, then set `llm.model` to that name. |
 
 Check the licence of each model before you publish or sell what it makes. They differ.
 
@@ -82,26 +82,51 @@ A style is a JSON file in `styles/`: the prompt wrapped around every subject, an
 A site can keep its own in a `styles/` folder where the script is run from; those are added to the ones here.
 One style per site is what makes forty props look like one set.
 
-## Let a local model direct it
+## From a brief, the same way every time
 
-`director.py` takes a one-line brief instead of a job file. A vision model in Ollama plans the job, picks the best
-of several pictures, judges the finished `review.png`, and retries with a new subject or mesh settings on a fail.
+`forge.py` takes a one-line brief instead of a job file and runs the whole chain with local models only: Ollama
+plans and judges, ComfyUI draws and meshes, Blender reduces and renders. Nothing leaves the machine.
 
 ```
-python director.py "a chunky mint-green bedside lamp shaped like a mushroom, cream stem" --style toy
-python director.py "..." --rounds 3 --seeds 3 --pass 8 --name mushroom-lamp
-python director.py --judge <out>/props/mushroom-lamp "the brief"     # judge an existing review.png only
+python forge.py "a sprinkled donut"
+python forge.py "a chunky mint-green mushroom lamp, cream stem" --style toy --name mushroom-lamp
+python forge.py "..." --seed 2 --seeds 4 --rounds 3 --pass 7
 ```
 
-It writes the usual files plus `candidates/` (every picture and review sheet) and `director.json` (every plan,
-pick and verdict). A pass needs the model's own pass **and** a score of at least `--pass`: the model is lenient
-and will pass a prop it has just listed problems for. It still does not replace looking at `review.png`.
+The script makes every decision; the model only answers questions. Each round:
 
-The GPU is shared: each model call frees ComfyUI's models first, and Ollama unloads the language model as soon as
-it answers. One prop takes about two minutes a round on a 12 GB card.
+| Step | Who decides | What |
+|---|---|---|
+| plan | model, once | Subject wording, triangle budget, things to check. Any "no …" or "without …" clause is dropped: the picture model has no negative prompt, and the picker would hold it against the picture. `--fill` keeps pale panels the cut-out punches out |
+| draw | fixed seeds | `--seeds` FLUX pictures; seeds come from `--seed` and the round |
+| measure | numbers | Each cut-out: one object, not cut off, 4 to 75 % of the picture, white background, symmetry. A picture that fails is out |
+| pick | model, then a rule | The model scores the pictures; the best that passed the measures wins (ties: symmetry, then seed) |
+| mesh | the pipeline | Cut-out, Hunyuan3D 2, Blender low poly, review sheet |
+| check | numbers, then model | The mesh's front silhouette must match the picture (IoU 0.55 or more); then the model scores `review.png`. A pass needs both, and a score of `--pass` or more |
+| next | a rule | A wrong drawing: the model rewrites the subject, new seeds. A poor mesh: the next-best picture and 1.5x the triangles |
 
-`llm.banned` in `forge.json` is a list of words (brand or character names) that must never reach a prompt; a plan
-that uses one is sent back. `llm.py` is the small Ollama client the director uses.
+The bars are `GATES` at the top of `forge.py`.
+
+**Repeatable.** Every step is keyed by a hash of what goes into it: the prompt, the seed, the input files, the
+scripts that do the work and the language model's digest. A step whose key matches what is on disk is skipped.
+The model is asked at temperature 0 with a fixed seed, and `llm.py` keeps every answer in `<out>/llm-cache/`, so
+the same question gets the same answer without loading the model. Running the same command twice gives the same
+files, the second time in seconds; a run that stopped part way picks up where it stopped. `--fresh` redoes every
+step and asks the model again. A different `--seed` gives a different prop.
+
+It writes `<out>/props/<name>/` (`<name>` from `--name`, or the brief's first words): `r1/`, `r2/` ... with each
+round's candidate pictures, cut-out, meshes and sheet, `progress/` (one labelled picture per stage, in order: the
+candidates with their scores and which won, then the cut-out beside the model's sheet and verdict; it prints each
+path as it writes it), the chosen `<name>.glb` and `review.png`, and `run.json`
+(every input, measure, score and decision, and the versions used). When no round passes, the best round is still
+kept and `run.json` says it did not pass. **Look at `review.png` before using a prop.**
+
+`llm.banned` in `forge.json` is a list of words (brand or character names) that must never reach a prompt: a
+brief that uses one is refused, and a plan or rewrite that uses one is asked again. `llm.py` is the small Ollama
+client.
+
+The GPU is shared: a model call that is not in the cache frees ComfyUI's models first, and Ollama unloads the
+language model as soon as it answers.
 
 ## Use Hyper3D Rodin instead of Hunyuan3D
 
@@ -166,7 +191,7 @@ Each job has a `theme`, `name`, `prompt`, `seed` and a `frame` (`main` 896 × 10
 | `comfy_run.py` | Python | Text to image through ComfyUI's HTTP API (FLUX schnell or SDXL; `"tile": true` for seamless patterns) |
 | `comfy_3d.py` | Python | Image to mesh with Hunyuan3D 2 |
 | `pick_source.py` | Python | Several seeds, keeps the most symmetric picture |
-| `director.py`, `llm.py` | Python | A brief in, a judged prop out, with a local model in Ollama planning and judging |
+| `forge.py`, `llm.py` | Python | A brief in, a checked prop out, repeatably, with a local model in Ollama planning and judging |
 | `rodin.py` | Python | Pictures or text to a textured model with Hyper3D Rodin (paid, hosted; API needs a Business plan) |
 | `art_run.py` | Python | Wall art |
 | `blender_lowpoly.py` | Blender | Cleans the mesh, reduces it, projects the picture as its texture, normalises it |

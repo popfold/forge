@@ -17,7 +17,7 @@ DEFAULTS = {
     "comfy_url": "http://127.0.0.1:8188",   # the ComfyUI server's HTTP API
     "blender": "blender",                   # the Blender program (a full path, or a name on PATH)
     "out": "forge-out",                     # where pictures, meshes and finished props are written
-    # a local vision language model (Ollama) for director.py's planner and judge; "banned": words kept out of prompts
+    # a local vision language model (Ollama) for forge.py's planner and judge; "banned": words kept out of prompts
     "llm": {"url": "http://127.0.0.1:11434", "model": ""},
     # Hyper3D Rodin, a paid hosted image-to-3D service (rodin.py); point key_file at a file outside the repo
     "rodin": {"key_file": "", "tier": "Gen-2.5-Medium"},
