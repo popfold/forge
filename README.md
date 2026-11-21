@@ -210,6 +210,9 @@ What we found on a 12 GB card (RTX 4070 SUPER):
 - **Thin radiating parts still fail.** A sunburst wall clock's brass rays came back spiky and melted into the face
   in three rounds, from 3000 to 6000 triangles. Chairs, tables, cabinets, a sofa, a planter and a standing figure
   all worked; for rays, spokes, wires and fine frames, build the part in Blender (`blender_assemble.py`).
+- **Chrome reads as see-through or white.** A kitchen stool's thick chrome legs came back transparent, then white
+  and rod-thin, and its footrest ring merged into them, three rounds running. Mirror finishes reflect the white
+  background, so the cut-out and the model treat them like glass. Ask for painted metal (a colour) instead.
 - **It decides how an object rests.** A donut drawn face-on comes back lying flat, as a real one would. The front
   silhouette then matches the picture less well (about 0.63) though the model is right, so the IoU gate is a
   sanity check, not a measure of quality.
