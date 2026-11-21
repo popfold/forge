@@ -113,6 +113,9 @@ What tuning them taught us (keep these in mind before changing a bar or a prompt
 
 - **A small model writes rules into a subject.** Qwen3-VL 8B wrote "no hole" into a donut and the picker then
   marked every real donut down. Prompt wording did not stop it; `positive()` drops such clauses in code.
+- **A picture has no scale, so say the proportions.** "A floor lamp" alone came back as four table lamps: on a white
+  background a short lamp and a tall one look alike. Say how parts compare ("a pole three times the height of its
+  shade", "as tall as a person").
 - **Pick the style for the object.** `toy` makes everything chunky and rounded; mid-century chairs came out as
   toddler furniture until they were drawn in `refined`.
 - **The judge and the picker must know the style.** Told to judge "a prop in a toy house", the judge failed a good
