@@ -75,7 +75,7 @@ def prepare(src: Path, dst_img: Path, dst_mask: Path, size=1024, border=0.12, fi
 
 def blender(script, *args):
     r = subprocess.run([BLENDER, "-b", "-P", str(HERE / script), "--", *map(str, args)], capture_output=True, text=True)
-    lines = [l for l in r.stdout.splitlines() if l.startswith(("LOWPOLY", "RENDERED", "front:", "islands", "  side", "ANIM"))]
+    lines = [l for l in r.stdout.splitlines() if l.startswith(("LOWPOLY", "FIT", "RENDERED", "front:", "islands", "  side", "ANIM"))]
     if r.returncode or not lines:
         raise RuntimeError(r.stdout[-1500:] + r.stderr[-1500:])
     return lines

@@ -6,7 +6,8 @@ textured `.glb` that follows Popfold's prop convention comes out.
 > **Alpha.** These are working scripts, not a polished tool. They were written on Windows with one GPU.
 
 ```
-prompt ── FLUX ──▶ picture ── rembg ──▶ cut-out ── Hunyuan3D 2 ──▶ dense mesh ── Blender ──▶ low-poly .glb + review sheet
+prompt ── FLUX ──▶ picture ── rembg ──▶ cut-out ─┬─ TRELLIS.2 ──▶ textured low-poly mesh ── Blender (turn, size) ──┬─▶ .glb + review sheet
+                                                └─ Hunyuan3D 2 ──▶ dense shape ── Blender (low poly, project) ────┘
 ```
 
 ## What you need
@@ -14,6 +15,7 @@ prompt ── FLUX ──▶ picture ── rembg ──▶ cut-out ── Hunyu
 | Thing | Notes |
 |---|---|
 | ComfyUI, running | With `flux1-schnell-fp8.safetensors` and `hunyuan3d-dit-v2.safetensors` in `models/checkpoints/` (`sd_xl_base_1.0.safetensors` too, for tileable patterns). A 12 GB GPU is enough. |
+| TRELLIS.2 files (optional, `forge.py`'s default mesh step) | ComfyUI 0.46 or newer, and six files (9.6 GB) from ComfyUI's own Hugging Face organisation; see "TRELLIS.2" below. |
 | Blender 4.2 or newer | Tested on 5.3. |
 | Python 3 | With the packages in `requirements.txt`. ComfyUI's own virtual environment already has most of them. |
 | Ollama (optional) | A local vision language model for `forge.py`. Tested with Qwen3-VL 8B (5.8 GB): `ollama pull hf.co/Qwen/Qwen3-VL-8B-Instruct-GGUF:Q4_K_M`, then set `llm.model` to that name. |
@@ -99,13 +101,34 @@ The script makes every decision; the model only answers questions. Each round:
 |---|---|---|
 | plan | model, once | Subject wording, triangle budget, things to check. Any "no …" or "without …" clause is dropped: the picture model has no negative prompt, and the picker would hold it against the picture. `--fill` keeps pale panels the cut-out punches out |
 | draw | fixed seeds | `--seeds` FLUX pictures; seeds come from `--seed` and the round |
-| measure | numbers | Each cut-out: one object, not cut off, 4 to 75 % of the picture, white background, symmetry. A picture that fails is out |
+| measure | numbers | Each cut-out: one object, not cut off, 4 to 75 % of the picture, a white border (a soft floor shadow is fine), symmetry. A picture that fails is out |
 | pick | model, then a rule | The model scores the pictures; the best that passed the measures wins (ties: symmetry, then seed) |
-| mesh | the pipeline | Cut-out, Hunyuan3D 2, Blender low poly, review sheet |
-| check | numbers, then model | The mesh's front silhouette must match the picture (IoU 0.55 or more); then the model scores `review.png`. A pass needs both, and a score of `--pass` or more |
+| mesh | the pipeline | `--mesh trellis` (default): TRELLIS.2, colours on every side. `--mesh hunyuan`: Hunyuan3D 2 and the picture projected on |
+| check | numbers, then model | The mesh's front silhouette must match the picture (IoU 0.55 for Hunyuan3D, 0.35 for TRELLIS.2); then the model scores `review.png` against the brief and the style's `about`. A pass needs both, and a score of `--pass` or more |
 | next | a rule | A wrong drawing: the model rewrites the subject, new seeds. A poor mesh: the next-best picture and 1.5x the triangles |
 
 The bars are `GATES` at the top of `forge.py`.
+
+What tuning them taught us (keep these in mind before changing a bar or a prompt):
+
+- **A small model writes rules into a subject.** Qwen3-VL 8B wrote "no hole" into a donut and the picker then
+  marked every real donut down. Prompt wording did not stop it; `positive()` drops such clauses in code.
+- **Pick the style for the object.** `toy` makes everything chunky and rounded; mid-century chairs came out as
+  toddler furniture until they were drawn in `refined`.
+- **The judge must know the style.** Told to judge "a prop in a toy house", it failed a good refined chair for not
+  being chunky. It is given the style's `about` and told that small details do not matter at this size.
+- **Measure the border, not the whole background.** Furniture on white casts a soft floor shadow that the cut-out
+  leaves behind; checking the whole background threw out half of the good chair pictures.
+- **The silhouette bar depends on the mesh model.** See the TRELLIS.2 notes below.
+- **Pin the answer's shape in the schema.** The picker once answered `{"scores": []}`, which an open schema
+  allowed, and every picture counted as unusable. `pick()` now asks for exactly one score per picture, numbered 1
+  to n, and asks again with the next seed if it is still short.
+- **The model ties and flatters.** It gave four chair pictures the same 6 despite "no ties", and passes most
+  finished models with 10/10. The measures and the tie-break (symmetry, then seed) do the real choosing; read
+  every `review.png` yourself.
+- **The planner's triangle budget is low for round things and figures.** It asks for about 1000; a chair with legs
+  holds up at that, but a curved shell looks faceted and a standing figure needs 1500 to 3000. The retry
+  rule raises it 1.5x a round.
 
 **Repeatable.** Every step is keyed by a hash of what goes into it: the prompt, the seed, the input files, the
 scripts that do the work and the language model's digest. A step whose key matches what is on disk is skipped.
@@ -127,6 +150,55 @@ client.
 
 The GPU is shared: a model call that is not in the cache frees ComfyUI's models first, and Ollama unloads the
 language model as soon as it answers.
+
+## TRELLIS.2: colours on every side, locally
+
+Hunyuan3D 2 makes only the shape; the colours are the front picture projected through, so sides and backs are a
+blurred guess. TRELLIS.2 (Microsoft, MIT licence) makes the shape **and** its colours all round. ComfyUI 0.46 has
+its nodes built in; `comfy_trellis.py` builds the graph in code, following ComfyUI's own template, and ends with
+ComfyUI remeshing it into one solid, decimating it to a dense 20,000 faces, unwrapping it and baking the colours
+into a texture. `blender_fit.py` then reduces it to the triangle budget, turns it to face front (by the same
+silhouette test as `blender_lowpoly.py`) and sizes it. `forge.py` uses it unless you pass `--mesh hunyuan`.
+
+```
+python comfy_trellis.py picture.png --faces 3000 --texture 1024      # one picture, outside forge.py
+```
+
+The files, from `huggingface.co/Comfy-Org` (ComfyUI's repackaging of each publisher's weights, in the format its
+loaders read), into ComfyUI's `models/` folder:
+
+| File | Folder | Size | Repo, licence |
+|---|---|---|---|
+| `trellis_2_int8_convrot.safetensors` | `diffusion_models` | 5.25 GB | `Comfy-Org/TRELLIS.2` (from `microsoft/TRELLIS.2-4B`), MIT |
+| `trellis_2_shape_vae_bf16.safetensors` | `vae` | 1.10 GB | `Comfy-Org/Pixal3D`, MIT |
+| `trellis_2_texture_vae_bf16.safetensors` | `vae` | 0.95 GB | `Comfy-Org/Pixal3D`, MIT |
+| `dino_v3_L_naf_fp32.safetensors` | `clip_vision` | 1.22 GB | `Comfy-Org/Pixal3D`; built on Meta's DINOv3, which has its own licence: read it before selling what you make |
+| `birefnet.safetensors` | `background_removal` | 0.44 GB | `Comfy-Org/BiRefNet`, MIT |
+| `moge_2_vitl_normal_fp16.safetensors` | `geometry_estimation` | 0.66 GB | `Comfy-Org/MoGe`, MIT (only for the Pixal3D half of the template; not used here) |
+
+Check each download's SHA-256 against the `lfs.oid` Hugging Face's API gives for the file
+(`/api/models/<repo>/paths-info/main`). The int8 model is the one that fits a 12 GB card; the bf16 one is 10.3 GB.
+
+What we found on a 12 GB card (RTX 4070 SUPER):
+
+- **It is much better.** The same donut picture gave a donut with icing, dough and sprinkles coloured on every
+  side, where Hunyuan3D's had a pink smear behind. Chunky objects come out as clean shapes.
+- **It is slow, and the upsample resolution decides how slow.** The template's `target_resolution` 1536 took about
+  45 s a step (8 minutes for 12 steps) and the colour decode then filled all 12 GB; the whole job took 25 minutes.
+  `comfy_trellis.py` uses 1024, which is plenty for a prop decimated to a few thousand faces.
+- **It decides how an object rests.** A donut drawn face-on comes back lying flat, as a real one would. The front
+  silhouette then matches the picture less well (about 0.63) though the model is right, so the IoU gate is a
+  sanity check, not a measure of quality.
+- **At 1024 a model takes about two minutes** (peak 11.4 GB), against 25 at the template's 1536.
+- **Do not let ComfyUI decimate to the budget.** Its `DecimateMesh` (midpoint) is quick and crude: a chair cut to
+  1000 faces came back crumpled. `forge.py` asks for 20,000 faces, ComfyUI bakes the colours onto those, and
+  `blender_fit.py --tris` reduces it with Blender's collapse decimation, which keeps the UVs, so the texture still
+  fits. A donut at 1000 triangles stays clean that way.
+- **Its colours come out darker, and greens weaker.** Teal upholstery came back navy and mustard came back orange;
+  a saturated orange came through about right. It is not one fixed shift, so a single correction does not fix it.
+  Compare `review.png` with the picture's colours before using a model.
+- **The output is already textured**, so `blender_lowpoly.py` (which re-projects the picture) is not used;
+  `blender_fit.py` keeps TRELLIS.2's texture and writes it as JPEG.
 
 ## Use Hyper3D Rodin instead of Hunyuan3D
 
@@ -189,12 +261,14 @@ Each job has a `theme`, `name`, `prompt`, `seed` and a `frame` (`main` 896 × 10
 |---|---|---|
 | `asset_pipeline.py` | Python | The whole chain for a list of assets, one phase at a time so the GPU loads each model once |
 | `comfy_run.py` | Python | Text to image through ComfyUI's HTTP API (FLUX schnell or SDXL; `"tile": true` for seamless patterns) |
-| `comfy_3d.py` | Python | Image to mesh with Hunyuan3D 2 |
+| `comfy_3d.py` | Python | Image to mesh with Hunyuan3D 2 (shape only) |
+| `comfy_trellis.py` | Python | Image to textured low-poly mesh with TRELLIS.2 |
 | `pick_source.py` | Python | Several seeds, keeps the most symmetric picture |
 | `forge.py`, `llm.py` | Python | A brief in, a checked prop out, repeatably, with a local model in Ollama planning and judging |
 | `rodin.py` | Python | Pictures or text to a textured model with Hyper3D Rodin (paid, hosted; API needs a Business plan) |
 | `art_run.py` | Python | Wall art |
 | `blender_lowpoly.py` | Blender | Cleans the mesh, reduces it, projects the picture as its texture, normalises it |
+| `blender_fit.py` | Blender | Turns a textured model to face front and sizes it, keeping its texture (TRELLIS.2) |
 | `blender_render.py` | Blender | A review sheet: `blender -b -P blender_render.py -- IN.glb OUT.png --views 4` |
 | `ortho_views.py` | Blender | Front, side, top and back with a measuring grid |
 | `blender_assemble.py` | Blender | Joins parts into one animated `.glb` from a JSON spec |

@@ -42,6 +42,7 @@ from scipy import ndimage
 import asset_pipeline as ap
 import comfy_3d
 import comfy_run
+import comfy_trellis
 import config
 import llm
 
@@ -51,8 +52,10 @@ HERE = Path(__file__).parent
 GATES = {
     "main_blob": 0.90,       # the largest cut-out piece holds at least this share of everything cut out
     "area": (0.04, 0.75),    # the object covers this share of the picture
-    "white": 0.90,           # this share of the background is near white
-    "front_iou": 0.55,       # the mesh's front silhouette overlaps the picture's this much
+    "white": 0.90,           # this share of the picture's border is near white (a soft floor shadow is fine)
+    # the mesh's front silhouette overlaps the picture's this much. TRELLIS.2's is lower for a good model: it
+    # rests objects as they would stand (a donut lies flat) and thin legs barely register on the coarse grid
+    "front_iou": {"hunyuan": 0.55, "trellis": 0.35},
     "pick": 5,               # the model's lowest acceptable picture score (0-10)
 }
 
@@ -88,6 +91,8 @@ VERDICT = {"type": "object", "required": ["score", "passed", "problems", "redo"]
              "description": "picture: the drawing itself is wrong (shape, colour, parts); mesh: the drawing was fine "
                             "but the 3D model is lumpy, holed or too coarse"}}}
 
+TRELLIS_FACES = 20000    # TRELLIS.2's own output; Blender reduces it to the budget
+
 FRESH = False
 _sess = None
 
@@ -102,7 +107,8 @@ def fhash(path):
     return sha(Path(path).read_bytes())
 
 
-CODE = {n: fhash(HERE / n) for n in ("asset_pipeline.py", "comfy_run.py", "comfy_3d.py", "blender_lowpoly.py", "blender_render.py")}
+CODE = {n: fhash(HERE / n) for n in ("asset_pipeline.py", "comfy_run.py", "comfy_3d.py", "comfy_trellis.py", "blender_lowpoly.py",
+                                     "blender_fit.py", "blender_render.py")}
 
 
 def step(folder, name, key, outputs, fn):
@@ -159,7 +165,10 @@ def measure(path):
     keep = lab == (int(np.argmax(sizes)) + 1)
     ys, xs = np.where(keep)
     crop = keep[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
-    bg = np.array(rgb)[~ndimage.binary_dilation(cut, iterations=6)]
+    # the border, not the whole background: furniture drawn on white casts a soft floor shadow the cut-out leaves
+    border = np.zeros_like(cut); b = max(4, H // 12)
+    border[:b] = border[-b:] = True; border[:, :b] = border[:, -b:] = True
+    bg = np.array(rgb)[border & ~ndimage.binary_dilation(cut, iterations=6)]
     m = {
         "main_blob": round(float(sizes.max() / sizes.sum()), 3),
         "area": round(float(keep.sum() / (H * W)), 3),
@@ -180,7 +189,7 @@ def mesh_numbers(lines):
     text = "\n".join(lines)
     num = lambda pat, cast=float: cast(re.search(pat, text).group(1)) if re.search(pat, text) else None  # noqa: E731
     return {"islands": num(r"islands=(\d+)", int), "kept": num(r"kept=(\d+)", int),
-            "front_iou": num(r"front: right=\S+ iou=([\d.]+)"), "tris": num(r"LOWPOLY .* tris=(\d+)", int),
+            "front_iou": num(r"(?:front: right=|FIT .* front=)\S+ iou=([\d.]+)"), "tris": num(r"(?:LOWPOLY|FIT) .* tris=(\d+)", int),
             "bytes": num(r"bytes=(\d+)", int)}
 
 
@@ -205,8 +214,18 @@ def pick(brief, subject, files, seed):
             f"{len(files)} in order. Each must show exactly one object that fits the brief, whole, straight from the "
             "front, on white, with chunky parts a mesh model can rebuild. Compare them against each other and the brief "
             "(colours, which part is which colour, shape). Give every picture a different score; no ties.")
-    got = {s["image"]: s for s in ask(RULES, user, PICK, images=files, seed=seed)["scores"]}
-    return [got.get(i + 1, {"image": i + 1, "score": 0, "problems": "not scored"}) for i in range(len(files))]
+    # the schema asks for exactly one score per picture, numbered 1..n: left open, the model once answered with an
+    # empty list and every picture counted as unusable. Still short? Ask again with the next seed.
+    n = len(files)
+    schema = json.loads(json.dumps(PICK)); arr = schema["properties"]["scores"]
+    arr["minItems"] = arr["maxItems"] = n
+    arr["items"]["properties"]["image"] |= {"minimum": 1, "maximum": n}
+    got = {}
+    for attempt in range(3):
+        got = {s["image"]: s for s in ask(RULES, user, schema, images=files, seed=seed + 100 * attempt)["scores"]}
+        if all(i + 1 in got for i in range(n)):
+            break
+    return [got.get(i + 1, {"image": i + 1, "score": 0, "problems": "not scored"}) for i in range(n)]
 
 
 def rewrite(brief, subject, problems, seed):
@@ -219,13 +238,15 @@ def rewrite(brief, subject, problems, seed):
     return subject
 
 
-def judge(brief, job, sheet, seed):
+def judge(brief, job, sheet, seed, style):
     user = (f"Brief: {brief}\nSubject drawn: {job['subject']}\nTriangle budget: {job['tris']}\n"
             f"Checks: {'; '.join(job.get('checks', [])) or 'none'}\n"
             "This sheet shows the finished low-poly 3D model from four sides. The back is always a guess and a little "
             "blurry, so do not fail it for that. Fail it for: wrong shape or colours for the brief, missing or merged "
-            "parts, lumps, holes, spikes, a melted look, or parts too thin to read. Pass it when it would look right as "
-            "a small prop in a toy house. Score it 0-10. Keep each problem to one short sentence.")
+            "parts, lumps, holes, spikes, a melted look, or parts too thin to read. It is low poly and will be seen small "
+            "on screen, so small details (knobs, seams, grain, exact shades) do not matter. Pass it when it would look "
+            f"right as a small prop in a miniature house in this style: {style.get('about', '')} "
+            "Score it 0-10. Keep each problem to one short sentence.")
     return ask(RULES, user, VERDICT, images=[sheet], seed=seed)
 
 
@@ -243,17 +264,39 @@ def draw(folder, prompt, seed):
     return out
 
 
-def make_mesh(rdir, source, tris, fill):
+def make_mesh(rdir, source, tris, fill, engine="trellis"):
     shutil.copy(source, rdir / "source.png")
-    # an earlier round with the same picture already has its cut-out and dense mesh: take them, with their keys
+    dense = ".hunyuan.json" if engine == "hunyuan" else ".trellis.json"
+    # an earlier round with the same picture already has its cut-out and mesh: take them, with their keys
     for prev in sorted(rdir.parent.glob("r*")):
-        if prev != rdir and (prev / ".hunyuan.json").exists() and (prev / "source.png").exists()                 and fhash(prev / "source.png") == fhash(source) and not (rdir / ".hunyuan.json").exists():
-            for f in ("prepared.png", "mask.png", "texture.png", "raw.glb", ".prepare.json", ".hunyuan.json"):
-                shutil.copy(prev / f, rdir / f)
+        if prev != rdir and (prev / dense).exists() and (prev / "source.png").exists()                 and fhash(prev / "source.png") == fhash(source) and not (rdir / dense).exists():
+            for f in ("prepared.png", "mask.png", "texture.png", "raw.glb", ".prepare.json", dense):
+                if (prev / f).exists():
+                    shutil.copy(prev / f, rdir / f)
             break
     prep = step(rdir, "prepare", {"src": fhash(source), "fill": fill, "code": CODE["asset_pipeline.py"]},
                 [rdir / "prepared.png", rdir / "mask.png", rdir / "texture.png"],
                 lambda: ap.prepare(rdir / "source.png", rdir / "prepared.png", rdir / "mask.png", fill=fill) or {})
+    glb = rdir / "prop.glb"
+    if engine == "trellis":
+        # TRELLIS.2 makes the low-poly, textured model itself; Blender only turns and sizes it
+        def trellis():
+            comfy_trellis.OUT = rdir
+            # ComfyUI's decimation is quick and crude (it crumpled a chair at 1000 faces): stop at a dense
+            # mesh, bake the colours onto it, and let Blender reduce it to the budget in the fit step
+            r = comfy_trellis.run(rdir / "prepared.png", faces=TRELLIS_FACES)
+            Path(r["file"]).replace(rdir / "raw.glb")
+            return {"seconds": r["seconds"], "peak_vram_mib": r["peak_vram_mib"]}
+        step(rdir, "trellis", {"prepared": fhash(rdir / "prepared.png"), "faces": TRELLIS_FACES, "files": comfy_trellis.FILES,
+                               "code": CODE["comfy_trellis.py"]}, [rdir / "raw.glb"], trellis)
+
+        def fit():
+            lines = ap.blender("blender_fit.py", rdir / "raw.glb", rdir / "mask.png", glb, "--tris", tris)
+            ap.blender("blender_render.py", glb, rdir / "review.png", "--views", 4)
+            return mesh_numbers(lines)
+        return step(rdir, "fit", {"raw": fhash(rdir / "raw.glb"), "mask": fhash(rdir / "mask.png"), "tris": tris,
+                                  "code": [CODE["blender_fit.py"], CODE["blender_render.py"], CODE["asset_pipeline.py"]]},
+                    [glb, rdir / "review.png"], fit)
 
     def hunyuan():
         comfy_3d.OUT = rdir
@@ -262,7 +305,6 @@ def make_mesh(rdir, source, tris, fill):
         return {"seconds": r["seconds"]}
     step(rdir, "hunyuan", {"prepared": fhash(rdir / "prepared.png"), "ckpt": comfy_3d.CKPT, "code": CODE["comfy_3d.py"]},
          [rdir / "raw.glb"], hunyuan)
-    glb = rdir / "prop.glb"
 
     def lowpoly():
         lines = ap.blender("blender_lowpoly.py", rdir / "raw.glb", rdir / "texture.png", rdir / "mask.png", glb, "--tris", tris)
@@ -331,6 +373,8 @@ def main():
     p.add_argument("--seeds", type=int, default=4)
     p.add_argument("--rounds", type=int, default=3)
     p.add_argument("--pass", dest="pass_mark", type=int, default=7)
+    p.add_argument("--mesh", choices=["trellis", "hunyuan"], default="trellis",
+                   help="trellis: shape and colours on every side (slower); hunyuan: shape only, the picture projected on")
     p.add_argument("--fill", action="store_true", help="keep pale or see-through panels the cut-out punches out")
     p.add_argument("--fresh", action="store_true")
     a = p.parse_args()
@@ -342,7 +386,7 @@ def main():
     name = a.name or slug(brief)
     d = ap.OUT / name; d.mkdir(parents=True, exist_ok=True)
     shutil.rmtree(d / "progress", ignore_errors=True)  # this run's pictures only
-    log = {"brief": brief, "name": name, "style": a.style, "seed": a.seed, "seeds": a.seeds, "rounds": a.rounds,
+    log = {"brief": brief, "name": name, "mesh": a.mesh, "style": a.style, "seed": a.seed, "seeds": a.seeds, "rounds": a.rounds,
            "pass": a.pass_mark, "gates": GATES, "versions": versions(), "round": []}
     save = lambda: (d / "run.json").write_text(json.dumps(log, indent=2), encoding="utf-8")  # noqa: E731
     say = lambda s: print(s, flush=True)  # noqa: E731
@@ -384,10 +428,11 @@ def main():
                 continue
         chosen = pool.pop(0)
         entry["chosen"] = chosen["seed"]
-        mesh = make_mesh(rdir, Path(chosen["file"]), tris, job["fill"])
+        mesh = make_mesh(rdir, Path(chosen["file"]), tris, job["fill"], a.mesh)
         entry["mesh"] = mesh
-        fails = [] if (mesh.get("front_iou") or 0) >= GATES["front_iou"] else [f"front silhouette {mesh.get('front_iou')}"]
-        verdict = judge(brief, job | {"subject": subject, "tris": tris}, rdir / "review.png", a.seed + rnd)
+        bar = GATES["front_iou"][a.mesh]
+        fails = [] if (mesh.get("front_iou") or 0) >= bar else [f"front silhouette {mesh.get('front_iou')} under {bar}"]
+        verdict = judge(brief, job | {"subject": subject, "tris": tris}, rdir / "review.png", a.seed + rnd, style)
         passed = not fails and verdict["passed"] and verdict["score"] >= a.pass_mark
         entry |= {"gate_fails": fails, "verdict": verdict, "passed": passed}
         say(f"judge    r{rnd} s{chosen['seed']}: {verdict['score']}/10, front {mesh.get('front_iou')}, "
