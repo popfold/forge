@@ -204,18 +204,26 @@ def mesh_numbers(lines):
 
 def plan(brief, style, seed):
     user = f"Brief: {brief}\nStyle: {style.get('about', '')}\nPlan the job."
+    # a subject that drops most of the brief is no plan: asked for a walnut, cream and brass floor lamp, the model
+    # once answered just "floor-standing lamp". Ask again; in the end draw from the brief itself
+    short = max(6, len(brief.split()) // 3)
     for attempt in range(3):
         p = ask(RULES, user, PLAN, seed=seed + attempt)
         p["subject"] = positive(p["subject"])
         p["checks"] = [c for c in p["checks"] if positive(c) == c.strip().rstrip(".")]
         hit = banned(p["subject"])
-        if p["subject"] and not hit:
-            p["tris"] = max(600, min(6000, int(p["tris"])))
-            if p.get("figure"):
-                p["tris"] = max(p["tris"], FIGURE_TRIS)
-            return p
-        user += f"\nYour last subject used a word that is not allowed ({', '.join(hit)}). Describe it without it."
-    raise SystemExit(f"the planner kept using banned words: {hit}")
+        if p["subject"] and not hit and len(p["subject"].split()) >= short:
+            break
+        user += (f"\nYour last subject used a word that is not allowed ({', '.join(hit)}). Describe it without it." if hit
+                 else "\nYour last subject left out most of the brief. Keep its parts, colours and materials.")
+    else:
+        if hit:
+            raise SystemExit(f"the planner kept using banned words: {hit}")
+        p["subject"] = positive(brief)
+    p["tris"] = max(600, min(6000, int(p["tris"])))
+    if p.get("figure"):
+        p["tris"] = max(p["tris"], FIGURE_TRIS)
+    return p
 
 
 def pick(brief, subject, files, seed, style):

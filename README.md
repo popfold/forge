@@ -117,6 +117,10 @@ What tuning them taught us (keep these in mind before changing a bar or a prompt
   and so did "a tall floor-standing lamp, as tall as a person, its pole three times the height of its shade", in
   two rounds more. The plan now says the object's outline (`tall`, `wide` or `square`) and FLUX draws on a canvas of
   that shape (768 x 1344, 1344 x 768, 1024 x 1024); `--shape` overrides it.
+- **A subject that drops the brief is asked again.** Once the plan gained a `shape` field, the planner answered a
+  detailed walnut, cream and brass floor lamp with just "floor-standing lamp" (and called the lamp a figure). A
+  subject shorter than a third of the brief is asked for again with the next seed; after three tries the brief
+  itself is drawn.
 - **Pick the style for the object.** `toy` makes everything chunky and rounded; mid-century chairs came out as
   toddler furniture until they were drawn in `refined`.
 - **The judge and the picker must know the style.** Told to judge "a prop in a toy house", the judge failed a good
