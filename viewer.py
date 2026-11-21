@@ -1,0 +1,141 @@
+"""A small web viewer for every model the forge made: a grid of thumbnails, tap one to turn it around.
+
+    python viewer.py [--port 5195] [--host 127.0.0.1]
+
+Serves <out> (config.py) read-only: the library in <out>/models, each prop's final model, review sheet and
+progress pictures in <out>/props, and the test meshes in <out>/meshes. Each model is shown with what its
+run.json says about it (the brief, the judge's score and problems, the front match, triangles, size).
+--host 0.0.0.0 lets a phone on the same network open it; a tunnel to the port works too. three.js comes from
+Popfold's own node_modules (run pnpm install in the Popfold folder first). Standard library only.
+
+Thumbnails are drawn by the first browser that shows a model and sent back to <out>/viewer-thumbs, so a phone
+downloads a small picture per model instead of every model.
+"""
+import json
+import mimetypes
+import re
+import sys
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
+import config
+
+HERE = Path(__file__).parent
+THREE = HERE.parents[1] / "node_modules" / "three"
+OUT = config.OUT
+THUMBS = OUT / "viewer-thumbs"
+SERVED = {".glb", ".png", ".jpg", ".jpeg", ".webp", ".json"}
+ROUND = re.compile(r"^(?P<name>.+)-r(?P<round>\d+)-s(?P<seed>\d+)(?P<dense>-dense)?\.glb$")
+
+
+def runs():
+    """Every prop's run.json, by name."""
+    found = {}
+    for f in sorted((OUT / "props").glob("*/run.json")):
+        try:
+            found[f.parent.name] = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+    return found
+
+
+def rel(p: Path):
+    return p.relative_to(OUT).as_posix()
+
+
+def catalogue():
+    """One entry per model file, newest first, with what the forge recorded about it."""
+    all_runs = runs()
+    items = []
+
+    def entry(f: Path, group, **extra):
+        st = f.stat()
+        thumb = f"{rel(f).replace('/', '__')}-{int(st.st_mtime)}.webp"
+        return {"file": rel(f), "group": group, "bytes": st.st_size, "mtime": int(st.st_mtime),
+                "thumb": thumb, "has_thumb": (THUMBS / thumb).exists(), **extra}
+
+    for f in sorted((OUT / "models").glob("*.glb")):
+        m = ROUND.match(f.name)
+        name = m["name"] if m else f.stem
+        run = all_runs.get(name, {})
+        info = {"name": name, "brief": run.get("brief", ""), "style": run.get("style", "")}
+        if m:
+            info |= {"round": int(m["round"]), "seed": int(m["seed"]), "dense": bool(m["dense"])}
+            r = next((r for r in run.get("round", []) if r.get("library") == f.name.replace("-dense", "")), None)
+            if r:
+                v = r.get("verdict") or {}
+                info |= {"subject": r.get("subject", ""), "passed": bool(r.get("passed")), "score": v.get("score"),
+                         "problems": v.get("problems", []), "gate_fails": r.get("gate_fails", []),
+                         "front_iou": (r.get("mesh") or {}).get("front_iou"), "tris": (r.get("mesh") or {}).get("tris")}
+            res = run.get("result") or {}
+            info["final"] = bool(res.get("passed")) and res.get("round") == info["round"] and not info["dense"]
+        items.append(entry(f, "library", **info))
+    for d in sorted((OUT / "props").iterdir()) if (OUT / "props").is_dir() else []:
+        glb = d / f"{d.name}.glb"
+        if not glb.exists():
+            continue
+        run = all_runs.get(d.name, {})
+        res = run.get("result") or {}
+        pics = sorted(rel(p) for p in (d / "progress").glob("*.jpg")) if (d / "progress").is_dir() else []
+        last = next((r for r in run.get("round", []) if r.get("round") == res.get("round")), {})
+        v, mesh = last.get("verdict") or {}, last.get("mesh") or {}
+        items.append(entry(glb, "props", name=d.name, brief=run.get("brief", ""), style=run.get("style", ""),
+                           round=res.get("round"), subject=last.get("subject"), score=v.get("score"),
+                           problems=v.get("problems", []), front_iou=mesh.get("front_iou"), tris=mesh.get("tris"),
+                           passed=res.get("passed"), review=rel(d / "review.png") if (d / "review.png").exists() else None,
+                           progress=pics))
+    for f in sorted((OUT / "meshes").glob("*.glb")) if (OUT / "meshes").is_dir() else []:
+        items.append(entry(f, "tests", name=f.stem))
+    items.sort(key=lambda i: -i["mtime"])
+    return items
+
+
+class Handler(SimpleHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+    def send(self, body: bytes, kind: str, cache="no-cache"):
+        self.send_response(200)
+        self.send_header("Content-Type", kind); self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", cache)
+        self.end_headers(); self.wfile.write(body)
+
+    def file(self, root: Path, sub: str, cache="no-cache"):
+        p = (root / sub).resolve()
+        if root.resolve() not in p.parents or not p.is_file():
+            return self.send_error(404)
+        self.send(p.read_bytes(), mimetypes.guess_type(p.name)[0] or "application/octet-stream", cache)
+
+    def do_GET(self):
+        path = unquote(urlparse(self.path).path)
+        if path in ("/", "/index.html"):
+            return self.file(HERE, "viewer.html")
+        if path == "/api/models":
+            return self.send(json.dumps(catalogue()).encode(), "application/json")
+        if path.startswith("/three/"):
+            return self.file(THREE, path[7:], "max-age=86400")
+        if path.startswith("/thumbs/"):
+            return self.file(THUMBS, path[8:], "max-age=31536000")
+        if path.startswith("/files/") and Path(path).suffix.lower() in SERVED:
+            return self.file(OUT, path[7:])
+        self.send_error(404)
+
+    def do_POST(self):  # a thumbnail drawn by a browser: <file with / as __>-<mtime>.webp, nothing else
+        name = unquote(urlparse(self.path).path)[8:]
+        n = int(self.headers.get("Content-Length", 0))
+        if not self.path.startswith("/thumbs/") or not re.fullmatch(r"[\w.\-]+\.webp", name) or not 0 < n < 2_000_000:
+            return self.send_error(400)
+        THUMBS.mkdir(parents=True, exist_ok=True)
+        (THUMBS / name).write_bytes(self.rfile.read(n))
+        self.send(b"ok", "text/plain")
+
+
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    opt = lambda k, d: type(d)(a[a.index(k) + 1]) if k in a else d  # noqa: E731
+    host, port = opt("--host", "127.0.0.1"), opt("--port", 5195)
+    if not (THREE / "build" / "three.module.js").exists():
+        sys.exit(f"three.js not found in {THREE}: run pnpm install in the Popfold folder")
+    print(f"forge viewer: http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}  ({OUT})", flush=True)
+    ThreadingHTTPServer((host, port), Handler).serve_forever()

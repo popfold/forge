@@ -186,6 +186,21 @@ client.
 The GPU is shared: a model call that is not in the cache frees ComfyUI's models first, and Ollama unloads the
 language model as soon as it answers.
 
+### Look at every model: the viewer
+
+```
+python viewer.py                    # http://127.0.0.1:5195
+python viewer.py --host 0.0.0.0     # also from a phone on the same network, or through a tunnel to the port
+```
+
+A grid of every model in `<out>`: the props (each final model, with its review sheet and progress pictures), every
+round's model in `<out>/models`, the dense ones and the test meshes. Tap one to turn it around, in wireframe if
+you like, with what its `run.json` says: the brief, the judge's score and problems, the front match, triangles and
+size. A link to one model is the page's address with `#<file>`. It serves `<out>` read-only, with three.js from
+Popfold's `node_modules` and nothing but Python's standard library. The first browser to show a model draws its
+thumbnail and sends it back to `<out>/viewer-thumbs/`, so a phone downloads a small picture per model, not
+every model.
+
 ## TRELLIS.2: colours on every side, locally
 
 Hunyuan3D 2 makes only the shape; the colours are the front picture projected through, so sides and backs are a
@@ -327,6 +342,7 @@ Each job has a `theme`, `name`, `prompt`, `seed` and a `frame` (`main` 896 × 10
 | `comfy_trellis.py` | Python | Image to textured low-poly mesh with TRELLIS.2 |
 | `pick_source.py` | Python | Several seeds, keeps the most symmetric picture |
 | `forge.py`, `llm.py` | Python | A brief in, a checked prop out, repeatably, with a local model in Ollama planning and judging |
+| `viewer.py` | Python | A web page of every model made, to turn each one around, from a desktop or a phone |
 | `rodin.py` | Python | Pictures or text to a textured model with Hyper3D Rodin (paid, hosted; API needs a Business plan) |
 | `art_run.py` | Python | Wall art |
 | `blender_lowpoly.py` | Blender | Cleans the mesh, reduces it, projects the picture as its texture, normalises it |
