@@ -42,9 +42,9 @@ Run from this folder, with ComfyUI running:
 ```
 python asset_pipeline.py jobs/example-props.json                 # every asset in the file
 python asset_pipeline.py jobs/example-props.json mushroom-lamp   # one asset
-python asset_pipeline.py assets.json --from-image                # keep the pictures, redo mesh and Blender
-python asset_pipeline.py assets.json --from-mesh                 # redo only the Blender step
-python asset_pipeline.py assets.json --style=refined
+python asset_pipeline.py jobs/example-props.json --from-image   # keep the pictures, redo mesh and Blender
+python asset_pipeline.py jobs/example-props.json --from-mesh    # redo only the Blender step
+python asset_pipeline.py jobs/example-props.json --style=refined
 ```
 
 Each asset lands in `<out>/props/<name>/`: `source.png` (the picture), `prepared.png` and `mask.png` (the cut-out),
