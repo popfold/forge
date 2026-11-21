@@ -95,6 +95,16 @@ python forge.py "a chunky mint-green mushroom lamp, cream stem" --style toy --na
 python forge.py "..." --seed 2 --seeds 4 --rounds 3 --pass 7
 ```
 
+A batch of briefs is a JSON list, run one after another (`jobs/example-briefs.json` is one):
+
+```
+python forge.py --batch jobs/example-briefs.json             # each entry: name, brief, style?, shape?, tris?, seed?, mesh?, fill?
+python forge.py --batch jobs/example-briefs.json --fresh     # flags after the file apply to every entry
+```
+
+Keep the briefs you ran in such a file, outside the repository if they are a site's: it is the recipe that makes
+the same props again.
+
 The script makes every decision; the model only answers questions. Each round:
 
 | Step | Who decides | What |

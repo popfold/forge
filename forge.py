@@ -1,7 +1,8 @@
 """A brief in, a checked prop out, made the same way every time, with local models only.
 
     python forge.py "a sprinkled donut" [--style toy] [--name NAME] [--seed 1] [--seeds 4] [--rounds 3]
-                    [--pass 7] [--fresh]
+                    [--pass 7] [--mesh trellis|hunyuan] [--shape tall|wide|square] [--tris N] [--fill] [--fresh]
+    python forge.py --batch briefs.json [--fresh]       # every brief in a file, one after another
 
 Needs ComfyUI (FLUX schnell, Hunyuan3D 2), Blender and Ollama with a vision model (README.md). Nothing leaves
 this machine.
@@ -32,6 +33,7 @@ import hashlib
 import json
 import re
 import shutil
+import sys
 import urllib.request
 from pathlib import Path
 
@@ -516,5 +518,29 @@ def main():
         f"         look at {d / 'review.png'} before using it")
 
 
+def batch(path, extra):
+    """Run every brief in a JSON file, one at a time (the GPU holds one job). Each entry is
+    {"name", "brief", "style"?, "shape"?, "tris"?, "seed"?, "seeds"?, "rounds"?, "pass"?, "mesh"?, "fill"?}.
+    The same file always makes the same props: every step is keyed and kept, so a second run takes seconds."""
+    import subprocess
+    jobs = json.loads(Path(path).read_text(encoding="utf-8"))
+    done = []
+    for j in jobs:
+        args = [sys.executable, str(Path(__file__).resolve()), "--name", j["name"], *extra]
+        for k in ("style", "shape", "tris", "seed", "seeds", "rounds", "pass", "mesh"):
+            if k in j:
+                args += [f"--{k}", str(j[k])]
+        if j.get("fill"):
+            args.append("--fill")
+        print(f"=== START {j['name']}", flush=True)
+        r = subprocess.run(args + [j["brief"]])
+        done.append((j["name"], r.returncode))
+        print(f"=== END {j['name']} ({'ok' if r.returncode == 0 else 'not passed'})", flush=True)
+    print("=== BATCH DONE  " + ", ".join(f"{n}: {'ok' if c == 0 else 'not passed'}" for n, c in done), flush=True)
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 2 and sys.argv[1] == "--batch":
+        batch(sys.argv[2], sys.argv[3:])  # extra flags (say --fresh) apply to every entry
+    else:
+        main()

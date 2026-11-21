@@ -1,0 +1,7 @@
+[
+  {"name": "sprinkled-donut", "brief": "a sprinkled donut", "style": "toy"},
+  {"name": "mcm-sofa", "brief": "a mid-century modern three-seat sofa: a long boxy seat with three olive green cushions and three back cushions, thin walnut base, short thick tapered walnut legs", "style": "refined", "shape": "wide"},
+  {"name": "mcm-floor-lamp", "brief": "a tall mid-century modern floor-standing lamp, as tall as a person: a thick walnut pole three times the height of its wide cream drum shade, standing on a round heavy brass disc base on the floor", "style": "refined", "shape": "tall"},
+  {"name": "retro-fridge", "brief": "a rounded retro refrigerator as tall as a person: mint green body with soft rounded corners, a thick chrome handle, one big door over a smaller bottom door, short thick feet", "style": "toy", "shape": "tall"},
+  {"name": "friendly-dinosaur", "brief": "a full-size friendly cartoon dinosaur figure of our own design, standing upright on its two thick back legs like a person, facing forward: teal green body, cream belly, round orange spots on its back, short arms, a long thick tail resting on the floor, a big friendly smile", "style": "toy", "shape": "tall", "tris": 3000}
+]
