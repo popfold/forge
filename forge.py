@@ -78,10 +78,12 @@ PLAN = {"type": "object", "required": ["subject", "tris", "figure", "checks"], "
     "checks": {"type": "array", "items": {"type": "string", "maxLength": 120}, "maxItems": 6,
                "description": "short things to look for in the finished model, from the brief"}}}
 
-PICK = {"type": "object", "required": ["scores"], "properties": {
-    "scores": {"type": "array", "items": {"type": "object", "required": ["image", "score", "problems"], "properties": {
-        "image": {"type": "integer"}, "score": {"type": "integer", "minimum": 0, "maximum": 10},
-        "problems": {"type": "string", "maxLength": 200}}}}}}
+PICK = {"type": "object", "required": ["problems", "score"], "properties": {
+    "problems": {"type": "string", "maxLength": 200, "description": "what in this picture does not fit the brief; empty if nothing"},
+    "score": {"type": "integer", "minimum": 0, "maximum": 10}}}
+
+LOOKER = """You check pictures for a pipeline that turns one picture of one object into a 3D model. Look carefully and
+count parts before you say one is missing. Judge only what is in the picture against the brief."""
 
 REWRITE = {"type": "object", "required": ["subject"], "properties": {"subject": {"type": "string", "maxLength": 220}}}
 
@@ -215,24 +217,17 @@ def plan(brief, style, seed):
 
 
 def pick(brief, subject, files, seed, style):
-    user = (f"Brief: {brief}\nSubject drawn: {subject}\nThese {len(files)} pictures are candidates, numbered 1 to "
-            f"{len(files)} in order. Each must show exactly one object that fits the brief, whole, straight from the "
-            "front, on white, with parts solid enough for a mesh model to rebuild. Judge thickness against this style, "
-            f"not against toys: {style.get('about', '')} Look closely before calling a part missing. Compare them against "
-            "each other and the brief (colours, which part is which colour, shape). Give every picture a different "
-            "score; no ties.")
-    # the schema asks for exactly one score per picture, numbered 1..n: left open, the model once answered with an
-    # empty list and every picture counted as unusable. Still short? Ask again with the next seed.
-    n = len(files)
-    schema = json.loads(json.dumps(PICK)); arr = schema["properties"]["scores"]
-    arr["minItems"] = arr["maxItems"] = n
-    arr["items"]["properties"]["image"] |= {"minimum": 1, "maximum": n}
-    got = {}
-    for attempt in range(3):
-        got = {s["image"]: s for s in ask(RULES, user, schema, images=files, seed=seed + 100 * attempt)["scores"]}
-        if all(i + 1 in got for i in range(n)):
-            break
-    return [got.get(i + 1, {"image": i + 1, "score": 0, "problems": "not scored"}) for i in range(n)]
+    """Score each picture on its own. Shown four at once, an 8B model sees each one small and miscounts: it said
+    four sofas with three back cushions each had two. Problems come first in the answer so the score follows them."""
+    user = (f"Brief: {brief}\nStyle: {style.get('about', '')}\nThis picture should show exactly one such object, whole, "
+            "seen from the front or a little to one side, on white, with parts solid enough for a 3D model to rebuild. "
+            "Say what does not fit the brief, then score it 0-10: 8-10 fits the brief well, 5-7 is usable with small "
+            "differences, under 5 is the wrong object, the wrong colours, cut off or more than one object.")
+    out = []
+    for i, f in enumerate(files):
+        a = ask(LOOKER, user, PICK, images=[f], seed=seed)
+        out.append({"image": i + 1, "score": int(a["score"]), "problems": a["problems"]})
+    return out
 
 
 def rewrite(brief, subject, problems, seed):

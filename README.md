@@ -102,7 +102,7 @@ The script makes every decision; the model only answers questions. Each round:
 | plan | model, once | Subject wording, triangle budget, things to check. Any "no …" or "without …" clause is dropped: the picture model has no negative prompt, and the picker would hold it against the picture. `--fill` keeps pale panels the cut-out punches out |
 | draw | fixed seeds | `--seeds` FLUX pictures; seeds come from `--seed` and the round |
 | measure | numbers | Each cut-out: one object, not cut off, 4 to 75 % of the picture, a white border (a soft floor shadow is fine), symmetry. A picture that fails is out |
-| pick | model, then a rule | The model scores the pictures; the best that passed the measures wins (ties: symmetry, then seed) |
+| pick | model, then a rule | The model scores each picture on its own; the best that passed the measures wins (ties: symmetry, then seed) |
 | mesh | the pipeline | `--mesh trellis` (default): TRELLIS.2, colours on every side. `--mesh hunyuan`: Hunyuan3D 2 and the picture projected on |
 | check | numbers, then model | The mesh's front silhouette must match the picture (IoU 0.55 for Hunyuan3D, 0.45 for TRELLIS.2); then the model scores `review.png` against the brief and the style's `about`. A pass needs both, and a score of `--pass` or more |
 | next | a rule | A wrong drawing: the model rewrites the subject, new seeds. A poor mesh: the next-best picture and 1.5x the triangles |
@@ -125,6 +125,10 @@ What tuning them taught us (keep these in mind before changing a bar or a prompt
 - **Measure the border, not the whole background.** Furniture on white casts a soft floor shadow that the cut-out
   leaves behind; checking the whole background threw out half of the good chair pictures.
 - **The silhouette bar depends on the mesh model.** See the TRELLIS.2 notes below.
+- **Show a small model one picture at a time.** Given four pictures in one request, Qwen3-VL 8B saw each one small
+  and miscounted: four sofas with three back cushions each were "missing" one, and all scored 1 to 3. Scored one
+  by one (with the problems written before the score), the same pictures got 7, 9, 5 and 5 with correct reasons,
+  including spotting the one two-seater. It costs four calls instead of one, all kept in the cache.
 - **Pin the answer's shape in the schema.** The picker once answered `{"scores": []}`, which an open schema
   allowed, and every picture counted as unusable. `pick()` now asks for exactly one score per picture, numbered 1
   to n, and asks again with the next seed if it is still short.
