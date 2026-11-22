@@ -1,0 +1,8 @@
+Copyright (c) 2026 Dimiter Todorov. All rights reserved.
+
+This software and its documentation are proprietary. No licence is granted to use, copy, modify, merge, publish,
+distribute, sublicense or sell any part of it without the prior written permission of the copyright holder.
+
+Third-party models, libraries and tools that this software calls or downloads (among them TRELLIS.2, Hunyuan3D,
+FLUX.1 schnell, Chroma1-HD, Qwen3-VL, DINOv3, BiRefNet, rembg, ComfyUI and Blender) are not part of it and remain
+under their own licences. Content generated with them is subject to those licences.

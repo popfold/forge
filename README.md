@@ -416,3 +416,5 @@ The forge drives models it does not ship; each keeps its own licence: TRELLIS.2 
 2.1 (Tencent, Tencent Hunyuan Community licence), FLUX.1 schnell (Black Forest Labs, Apache 2.0), Chroma1-HD
 (lodestones, Apache 2.0), Qwen3-VL (Alibaba Qwen, Apache 2.0), BiRefNet and rembg for cut-outs, ComfyUI and Blender.
 Check a model's licence before shipping what it made.
+
+The forge itself is all rights reserved: see [LICENSE](LICENSE).
