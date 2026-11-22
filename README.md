@@ -225,11 +225,16 @@ To try a 3D model on Hugging Face's GPUs before installing it, and what that cos
 ## Hunyuan3D 2.1, locally
 
 `--mesh hunyuan21` runs Hunyuan3D 2.1's shape model with ComfyUI's own nodes, following its 2.1 template (a 4096
-latent, a centred crop). Tried on a desk, a standing figure and a creature: about 80 to 90 seconds each, with an
-11.4 GB peak on a 12 GB GPU. Its shapes are clean and closed (one piece, drawers and fingers read well), but it
-makes no colours: the front picture is projected through, so sides and backs are a pale smear. TRELLIS.2 is still
-the better all-round choice; Hunyuan3D 2.1 is the cleaner shape. Its texture model is not in ComfyUI and needs
-far more than 12 GB.
+latent, a centred crop). It takes a picture only, no prompt. Tried on seven props: 77 to 91 seconds each, with an
+11.1 to 11.5 GB peak on a 12 GB GPU (nothing else fits beside it).
+
+- **The cleaner shape, most where TRELLIS.2 fails.** A sunburst clock whose thin rays TRELLIS.2 turned to spikes in
+  three rounds came out with thick, clean rays, hands and markers (front match 0.83 against 0.76); a moulded shell
+  chair TRELLIS.2 crumpled came out smooth on clean legs (0.76 against 0.38). Always one closed piece.
+- **No colours.** The front picture is projected through, so sides and backs are a stretched smear: fine for
+  furniture seen from the front, poor for figures seen all round (they go pale away from the front).
+- Choose by what will be seen: `hunyuan21` for furniture and thin or curved parts, `trellis` (the default) for
+  figures and anything seen from every side. Its texture model is not in ComfyUI and needs far more than 12 GB.
 
 ## TRELLIS.2: colours on every side, locally
 
