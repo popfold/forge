@@ -27,6 +27,17 @@ THREE = HERE.parents[1] / "node_modules" / "three"
 OUT = config.OUT
 THUMBS = OUT / "viewer-thumbs"
 SERVED = {".glb", ".png", ".jpg", ".jpeg", ".webp", ".json"}
+# who made a model: a short name for the card, and the whole chain for the info panel
+FORGE = "FLUX schnell drew it, {mesh} made the 3D model, Blender reduced it; Qwen3-VL 8B planned and judged (all local)"
+MESHER = {"trellis": "TRELLIS.2", "hunyuan": "Hunyuan3D 2"}
+WAYS = {  # compare/<way>/: a log.json "made_by" says it better, when there is one
+    "rodin": ("Rodin", "Hyper3D Rodin (hosted, paid credits), from the forge's picture"),
+    "blender": ("Blender", "the forge's TRELLIS.2 model, cleaned up and reduced in Blender by a script"),
+    "pixal3d": ("Pixal3D", "Pixal3D (TencentARC), shape and texture, on a Hugging Face Space"),
+    "hunyuan21": ("Hunyuan3D 2.1", "Hunyuan3D 2.1 (Tencent), shape and PBR texture, on a Hugging Face Space"),
+    "hi3d": ("Hi3D", "Hi3D v1.0 (a Sparc3D refiner), shape only, on a Hugging Face Space"),
+    "direct3d": ("Direct3D-V3", "Direct3D-V3, shape only, refining the forge's TRELLIS.2 mesh, on a Hugging Face Space"),
+}
 ROUND = re.compile(r"^(?P<name>.+)-r(?P<round>\d+)-s(?P<seed>\d+)(?P<dense>-dense)?\.glb$")
 
 
@@ -60,7 +71,9 @@ def catalogue():
         m = ROUND.match(f.name)
         name = m["name"] if m else f.stem
         run = all_runs.get(name, {})
-        info = {"name": name, "brief": run.get("brief", ""), "style": run.get("style", "")}
+        mesher = MESHER.get(run.get("mesh", "trellis"), run.get("mesh"))
+        info = {"name": name, "brief": run.get("brief", ""), "style": run.get("style", ""), "maker": mesher,
+                "made_by": f"{mesher}, its dense model before Blender" if m and m["dense"] else FORGE.format(mesh=mesher)}
         if m:
             info |= {"round": int(m["round"]), "seed": int(m["seed"]), "dense": bool(m["dense"])}
             r = next((r for r in run.get("round", []) if r.get("library") == f.name.replace("-dense", "")), None)
@@ -81,7 +94,9 @@ def catalogue():
         pics = sorted(rel(p) for p in (d / "progress").glob("*.jpg")) if (d / "progress").is_dir() else []
         last = next((r for r in run.get("round", []) if r.get("round") == res.get("round")), {})
         v, mesh = last.get("verdict") or {}, last.get("mesh") or {}
+        mesher = MESHER.get(run.get("mesh", "trellis"), run.get("mesh"))
         items.append(entry(glb, "props", name=d.name, brief=run.get("brief", ""), style=run.get("style", ""),
+                           maker=mesher, made_by=FORGE.format(mesh=mesher),
                            round=res.get("round"), subject=last.get("subject"), score=v.get("score"),
                            problems=v.get("problems", []), front_iou=mesh.get("front_iou"), tris=mesh.get("tris"),
                            passed=res.get("passed"), review=rel(d / "review.png") if (d / "review.png").exists() else None,
@@ -96,13 +111,16 @@ def catalogue():
         way = f.parents[1].name
         review = f.parent / "review.png"
         prop = f.parent.name
+        short, long = WAYS.get(way, (way, way))
         items.append(entry(f, "compare", name=f"{prop} · {way}" + ("" if f.stem == prop else f" · {f.stem}"), brief=all_runs.get(log.get("prop", ""), {}).get("brief", ""),
                            tris=log.get("triangles"), subject=f"{way}: {log.get('wall_seconds')} s"
                            + (f", {log['credits']} credits" if log.get("credits") is not None else ""),
                            problems=[log["notes"]] if isinstance(log.get("notes"), str) else log.get("notes", []),
-                           review=rel(review) if review.exists() else None))
+                           review=rel(review) if review.exists() else None,
+                           maker=log.get("maker", short), made_by=log.get("made_by", long)))
     for f in sorted((OUT / "meshes").glob("*.glb")) if (OUT / "meshes").is_dir() else []:
-        items.append(entry(f, "tests", name=f.stem))
+        maker = next((v for k, v in (("trellis", "TRELLIS.2"), ("hunyuan", "Hunyuan3D 2")) if k in f.stem), None)
+        items.append(entry(f, "tests", name=f.stem, maker=maker, made_by=maker and f"{maker} (an early test)"))
     items.sort(key=lambda i: -i["mtime"])
     return items
 

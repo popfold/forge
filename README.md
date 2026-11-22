@@ -14,7 +14,7 @@ prompt ── FLUX ──▶ picture ── rembg ──▶ cut-out ─┬─ TR
 
 | Thing | Notes |
 |---|---|
-| ComfyUI, running | With `flux1-schnell-fp8.safetensors` and `hunyuan3d-dit-v2.safetensors` in `models/checkpoints/` (`sd_xl_base_1.0.safetensors` too, for tileable patterns). A 12 GB GPU is enough. |
+| ComfyUI, running | With `flux1-schnell-fp8.safetensors` (or Chroma, for `--painter chroma`: see below) and `hunyuan3d-dit-v2.safetensors` in `models/checkpoints/` (`sd_xl_base_1.0.safetensors` too, for tileable patterns). A 12 GB GPU is enough. |
 | TRELLIS.2 files (optional, `forge.py`'s default mesh step) | ComfyUI 0.46 or newer, and six files (9.6 GB) from ComfyUI's own Hugging Face organisation; see "TRELLIS.2" below. |
 | Blender 4.2 or newer | Tested on 5.3. |
 | Python 3 | With the packages in `requirements.txt`. ComfyUI's own virtual environment already has most of them. |
@@ -155,6 +155,13 @@ What tuning them taught us (keep these in mind before changing a bar or a prompt
   holds up at that, but a curved shell looks faceted and a standing figure needs 3000. The plan now says whether
   the brief is a figure (a character, creature, animal or person), and a figure gets at least `FIGURE_TRIS` (3000).
   `--tris N` sets any budget directly. The retry rule raises it 1.5x a round.
+- **The planner softens what it finds rude.** Asked for an adult novelty creature, it rewrote the parts that made
+  it one as "rounded tips". `--subject "..."` draws exactly that wording; later rounds keep it and change only the seeds.
+- **FLUX schnell leaves out what its training data left out.** Told outright, in three wordings, to draw adult
+  novelty shapes, it drew mushroom caps. `--painter chroma` draws with Chroma1-HD instead (Apache 2.0, built on FLUX
+  schnell and trained without that filtering; 26 steps, so about ten times slower). It needs, from Comfy-Org's and
+  ComfyUI's own Hugging Face repositories, `Chroma1-HD-fp8mixed.safetensors` in `models/diffusion_models/`,
+  `t5xxl_fp8_e4m3fn_scaled.safetensors` in `models/text_encoders/` and FLUX's `ae.safetensors` in `models/vae/`.
 
 **Repeatable.** Every step is keyed by a hash of what goes into it: the prompt, the seed, the input files, the
 scripts that do the work and the language model's digest. A step whose key matches what is on disk is skipped.
@@ -196,10 +203,16 @@ python viewer.py --host 0.0.0.0     # also from a phone on the same network, or 
 A grid of every model in `<out>`: the props (each final model, with its review sheet and progress pictures), every
 round's model in `<out>/models`, the dense ones and the test meshes. Tap one to turn it around, in wireframe if
 you like, with what its `run.json` says: the brief, the judge's score and problems, the front match, triangles and
-size. A link to one model is the page's address with `#<file>`. It serves `<out>` read-only, with three.js from
+size, and what made it ("Made by": the picture, mesh and clean-up models, or the hosted service). A link to one
+model is the page's address with `#<file>`. An open page picks up new models every 30 seconds. It serves `<out>` read-only, with three.js from
 Popfold's `node_modules` and nothing but Python's standard library. The first browser to show a model draws its
 thumbnail and sends it back to `<out>/viewer-thumbs/`, so a phone downloads a small picture per model, not
-every model.
+every model. What comes through a tunnel cannot save thumbnails: leave `http://127.0.0.1:5195/?thumbs` open on this
+machine and it draws every missing one as models arrive.
+
+Side-by-side trials go in `<out>/compare/<way>/<prop>/<prop>.glb`, with `review.png` and a `log.json`
+(`wall_seconds`, `credits`, `triangles`, `notes`, and optionally `maker` and `made_by`); they show in the Compare
+tab.
 
 ## TRELLIS.2: colours on every side, locally
 
@@ -337,7 +350,7 @@ Each job has a `theme`, `name`, `prompt`, `seed` and a `frame` (`main` 896 × 10
 | Script | Runs in | Does |
 |---|---|---|
 | `asset_pipeline.py` | Python | The whole chain for a list of assets, one phase at a time so the GPU loads each model once |
-| `comfy_run.py` | Python | Text to image through ComfyUI's HTTP API (FLUX schnell or SDXL; `"tile": true` for seamless patterns) |
+| `comfy_run.py` | Python | Text to image through ComfyUI's HTTP API (FLUX schnell, Chroma or SDXL; `"tile": true` for seamless patterns) |
 | `comfy_3d.py` | Python | Image to mesh with Hunyuan3D 2 (shape only) |
 | `comfy_trellis.py` | Python | Image to textured low-poly mesh with TRELLIS.2 |
 | `pick_source.py` | Python | Several seeds, keeps the most symmetric picture |

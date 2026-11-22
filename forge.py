@@ -284,15 +284,18 @@ def judge(brief, job, sheet, seed, style):
 CANVAS = {"tall": (768, 1344), "wide": (1344, 768), "square": (1024, 1024)}
 
 
+PAINTER = "flux"  # --painter
+
+
 def draw(folder, prompt, seed, shape="square"):
     out = folder / f"s{seed}.png"
     w, h = CANVAS[shape]
 
     def go():
         comfy_run.OUT = folder
-        r = comfy_run.run({"name": f"s{seed}", "model": "flux", "seed": seed, "prompt": prompt, "width": w, "height": h})
+        r = comfy_run.run({"name": f"s{seed}", "model": PAINTER, "seed": seed, "prompt": prompt, "width": w, "height": h})
         return {"seconds": r["seconds"]}
-    step(folder, f"draw-s{seed}", {"prompt": prompt, "seed": seed, "size": [w, h], "ckpt": comfy_run.MODELS["flux"],
+    step(folder, f"draw-s{seed}", {"prompt": prompt, "seed": seed, "size": [w, h], "ckpt": comfy_run.MODELS[PAINTER],
                                    "code": CODE["comfy_run.py"]}, [out], go)
     return out
 
@@ -398,7 +401,7 @@ def versions():
 
 
 def main():
-    global FRESH
+    global FRESH, PAINTER
     p = argparse.ArgumentParser(description="A brief in, a checked prop out, with local models only.")
     p.add_argument("brief", nargs="+")
     p.add_argument("--style", default=ap.DEFAULT_STYLE)
@@ -412,9 +415,12 @@ def main():
     p.add_argument("--tris", type=int, help="the triangle budget, instead of the planner's")
     p.add_argument("--shape", choices=list(CANVAS), help="the picture's shape, instead of the planner's")
     p.add_argument("--fill", action="store_true", help="keep pale or see-through panels the cut-out punches out")
+    p.add_argument("--subject", help="draw exactly this, instead of the planner's subject; later rounds keep it and change seeds only")
+    p.add_argument("--painter", choices=["flux", "chroma"], default="flux",
+                   help="flux: FLUX schnell, 4 steps; chroma: Chroma1-HD, 26 steps, draws what FLUX's training left out")
     p.add_argument("--fresh", action="store_true")
     a = p.parse_args()
-    FRESH = a.fresh
+    FRESH, PAINTER = a.fresh, a.painter
     brief = " ".join(a.brief)
     if banned(brief):
         raise SystemExit(f"the brief uses a word that is not allowed: {banned(brief)}")
@@ -428,6 +434,9 @@ def main():
     say = lambda s: print(s, flush=True)  # noqa: E731
 
     job = plan(brief, style, a.seed) | {"fill": a.fill}
+    # the planner softens and shortens (asked for novelty-toy tentacle tips it wrote "rounded tips"): --subject is drawn as written
+    if a.subject:
+        job["subject"] = a.subject
     if a.tris:
         job["tris"] = max(600, min(6000, a.tris))
     job["shape"] = a.shape or job.get("shape") or "square"
@@ -462,7 +471,7 @@ def main():
             if not pool:
                 entry["decision"] = "no usable picture: rewrite the subject"; save()
                 say(f"next     r{rnd}: no usable picture, rewriting the subject")
-                subject = rewrite(brief, subject, [c["problems"] for c in cands] +
+                subject = a.subject or rewrite(brief, subject, [c["problems"] for c in cands] +
                                   [", ".join(c["measure"]["fails"]) for c in cands if c["measure"]["fails"]], a.seed + rnd)
                 continue
         chosen = pool.pop(0)
@@ -498,7 +507,7 @@ def main():
         # the rule for the next round
         if verdict["redo"] == "picture" and not fails:
             entry["decision"] = "wrong drawing: rewrite the subject, new seeds"
-            subject = rewrite(brief, subject, verdict["problems"], a.seed + rnd); pool = []
+            subject = a.subject or rewrite(brief, subject, verdict["problems"], a.seed + rnd); pool = []
         else:
             tris = min(6000, int(tris * 1.5))
             entry["decision"] = f"poor mesh: {'next-best' if pool else 'same'} picture, {tris} triangles"

@@ -177,7 +177,7 @@ function list() {
   if (!shown.length) grid.innerHTML = '<div class="empty">Nothing here.</div>';
   shown.forEach((i, n) => {
     const passed = i.passed === true ? 'ok' : i.passed === false ? 'bad' : '';
-    const tag = i.group === 'library' ? `r${i.round} s${i.seed}${i.score != null ? ' · ' + i.score + '/10' : ''}${i.final ? ' · final' : ''}` : kb(i.bytes);
+    const tag = (i.maker ? i.maker + ' · ' : '') + (i.group === 'library' ? `r${i.round} s${i.seed}${i.score != null ? ' · ' + i.score + '/10' : ''}${i.final ? ' · final' : ''}` : kb(i.bytes));
     const el = document.createElement('div'); el.className = 'card';
     el.innerHTML = `<div class="pic"><img data-i="${n}" alt=""></div><div class="t"><div class="n">${esc(i.name)}</div>` +
       `<div class="m"><span class="dot ${passed}"></span>${esc(tag)}</div></div>`;
@@ -205,7 +205,7 @@ let model = null, wire = false, token = 0;
 
 function info(i) {
   const prop = byName[i.name] || {};
-  const rows = [['Brief', i.brief || prop.brief], ['Subject', i.subject], ['Style', i.style],
+  const rows = [['Made by', i.made_by], ['Brief', i.brief || prop.brief], ['Subject', i.subject], ['Style', i.style],
     ['Judge', i.score != null ? `${i.score}/10${i.passed ? ', passed' : ', not passed'}` : i.passed != null ? (i.passed ? 'passed' : 'not passed') : ''],
     ['Problems', (i.problems || []).join('; ')], ['Gates', (i.gate_fails || []).join('; ')],
     ['Front match', i.front_iou], ['Triangles', i.tris], ['Size', kb(i.bytes)], ['File', i.file]].filter((r) => r[1] !== undefined && r[1] !== null && r[1] !== '');
@@ -260,6 +260,21 @@ window.__forgeReady = true;
 all = await (await fetch('/api/models')).json();
 for (const i of all) if (i.group === 'props') byName[i.name] = i;
 list();
+// new models show up while the page is open; ?thumbs also draws every missing thumbnail, in every tab, so one
+// local tab left open keeps the pictures ready for phones coming through the tunnel (which cannot save them)
+const queued = new Set();
+async function refresh() {
+  const fresh = await (await fetch('/api/models')).json().catch(() => null);
+  if (!fresh) return;
+  const key = (l) => l.map((i) => i.file + i.mtime).join('|');
+  if (key(fresh) !== key(all) && !$('#view').classList.contains('open')) {
+    all = fresh; for (const i of all) if (i.group === 'props') byName[i.name] = i;
+    list();
+  }
+  if (location.search.includes('thumbs'))
+    for (const i of all) if (!i.has_thumb && !queued.has(i.thumb)) { queued.add(i.thumb); queue.push({ item: i, img: new Image() }); pump(); }
+}
+setInterval(refresh, 30000); refresh();
 // a link to one model: /#props/<name>/<name>.glb
 function fromHash() {
   const f = decodeURIComponent(location.hash.slice(1)), it = all.find((i) => i.file === f);

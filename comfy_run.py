@@ -3,7 +3,7 @@
     python comfy_run.py jobs.json            # runs every job in the file
     python comfy_run.py jobs.json pattern-1  # runs only the named job(s)
 
-Each job: {"name", "prompt", "negative"?, "model"?: "sdxl"|"flux", "width"?, "height"?,
+Each job: {"name", "prompt", "negative"?, "model"?: "sdxl"|"flux"|"chroma", "width"?, "height"?,
            "steps"?, "cfg"?, "seed"?, "tile"?: bool}
 Images go to <out>/images/ (see config.py), with a results.csv log of time and peak VRAM.
 """
@@ -27,6 +27,10 @@ OUT = config.OUT / "images"
 MODELS = {
     "sdxl": {"ckpt": "sd_xl_base_1.0.safetensors", "steps": 30, "cfg": 6.5, "sampler": "dpmpp_2m", "scheduler": "karras"},
     "flux": {"ckpt": "flux1-schnell-fp8.safetensors", "steps": 4, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
+    # Chroma: FLUX-based, trained without FLUX's filtering of adult shapes (asked for novelty-toy tentacle tips,
+    # FLUX schnell drew mushroom caps). Separate files: the model, a T5 text encoder, FLUX's own picture decoder
+    "chroma": {"unet": "Chroma1-HD-fp8mixed.safetensors", "clip": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+               "vae": "ae.safetensors", "steps": 26, "cfg": 4.0, "sampler": "euler", "scheduler": "beta"},
 }
 DEFAULT_NEG = "text, watermark, logo, signature, blurry, lowres, jpeg artifacts, deformed, extra fingers"
 
@@ -41,17 +45,22 @@ def api(path, data=None):
 def workflow(job):
     m = MODELS[job.get("model", "sdxl")]
     seed = job.get("seed", random.randint(0, 2**31))
-    model_ref, vae_ref = ["1", 0], ["1", 2]
-    wf = {
-        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": m["ckpt"]}},
-        "2": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["1", 1], "text": job["prompt"]}},
-        "3": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["1", 1], "text": job.get("negative", DEFAULT_NEG)}},
-        "4": {"class_type": "EmptySD3LatentImage" if job.get("model") == "flux" else "EmptyLatentImage", "inputs": {"width": job.get("width", 1024), "height": job.get("height", 1024), "batch_size": 1}},
-        "9": {"class_type": "SeamlessTiling", "inputs": {"model": ["1", 0], "vae": ["1", 2], "enabled": bool(job.get("tile", False))}},
+    if "unet" in m:  # model, text encoder and decoder in separate files
+        wf = {"1": {"class_type": "UNETLoader", "inputs": {"unet_name": m["unet"], "weight_dtype": "default"}},
+              "10": {"class_type": "CLIPLoader", "inputs": {"clip_name": m["clip"], "type": job.get("model")}},
+              "11": {"class_type": "VAELoader", "inputs": {"vae_name": m["vae"]}}}
+        clip_ref, model_ref, vae_ref = ["10", 0], ["1", 0], ["11", 0]
+    else:
+        wf = {"1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": m["ckpt"]}}}
+        clip_ref, model_ref, vae_ref = ["1", 1], ["1", 0], ["1", 2]
+    wf |= {
+        "2": {"class_type": "CLIPTextEncode", "inputs": {"clip": clip_ref, "text": job["prompt"]}},
+        "3": {"class_type": "CLIPTextEncode", "inputs": {"clip": clip_ref, "text": job.get("negative", DEFAULT_NEG)}},
+        "4": {"class_type": "EmptySD3LatentImage" if job.get("model") in ("flux", "chroma") else "EmptyLatentImage", "inputs": {"width": job.get("width", 1024), "height": job.get("height", 1024), "batch_size": 1}},
     }
-    model_ref, vae_ref = ["9", 0], ["9", 1]
-    if not job.get("tile"):  # the tiling node is optional; plain images go straight from the checkpoint
-        del wf["9"]; model_ref, vae_ref = ["1", 0], ["1", 2]
+    if job.get("tile"):  # the tiling node is optional; plain images go straight from the loaders
+        wf["9"] = {"class_type": "SeamlessTiling", "inputs": {"model": model_ref, "vae": vae_ref, "enabled": True}}
+        model_ref, vae_ref = ["9", 0], ["9", 1]
     wf["5"] = {"class_type": "KSampler", "inputs": {
         "model": model_ref, "positive": ["2", 0], "negative": ["3", 0], "latent_image": ["4", 0],
         "seed": seed, "steps": job.get("steps", m["steps"]), "cfg": job.get("cfg", m["cfg"]),
