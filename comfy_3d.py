@@ -1,6 +1,6 @@
-"""Image -> 3D mesh (.glb) with ComfyUI's built-in Hunyuan3D 2 nodes (shape only, no texture).
+"""Image -> 3D mesh (.glb) with ComfyUI's built-in Hunyuan3D 2 / 2.1 nodes (shape only, no texture).
 
-    python comfy_3d.py IMAGE.png [IMAGE2.png ...]
+    python comfy_3d.py [--model hunyuan21] IMAGE.png [IMAGE2.png ...]
 
 Each image is uploaded to the ComfyUI server, turned into a mesh, and saved as
 <out>/meshes/<name>.glb (see config.py). Timing and peak VRAM are appended to
@@ -21,7 +21,12 @@ import config
 from comfy_run import SERVER, VramWatch, api
 
 OUT = config.OUT / "meshes"
-CKPT = "hunyuan3d-dit-v2.safetensors"
+# the same nodes run both; 2.1 follows ComfyUI's own 2.1 template (a finer latent, a centred crop)
+MODELS = {
+    "hunyuan": {"ckpt": "hunyuan3d-dit-v2.safetensors", "resolution": 3072, "crop": "none"},
+    "hunyuan21": {"ckpt": "hunyuan_3d_v2.1.safetensors", "resolution": 4096, "crop": "center"},
+}
+CKPT = MODELS["hunyuan"]["ckpt"]
 
 
 def upload(path: Path) -> str:
@@ -38,13 +43,14 @@ def upload(path: Path) -> str:
         return json.loads(r.read())["name"]
 
 
-def workflow(image_name: str, name: str, seed: int = 1):
+def workflow(image_name: str, name: str, seed: int = 1, model: str = "hunyuan"):
+    m = MODELS[model]
     return {
-        "1": {"class_type": "ImageOnlyCheckpointLoader", "inputs": {"ckpt_name": CKPT}},
+        "1": {"class_type": "ImageOnlyCheckpointLoader", "inputs": {"ckpt_name": m["ckpt"]}},
         "2": {"class_type": "LoadImage", "inputs": {"image": image_name}},
-        "3": {"class_type": "CLIPVisionEncode", "inputs": {"clip_vision": ["1", 1], "image": ["2", 0], "crop": "none"}},
+        "3": {"class_type": "CLIPVisionEncode", "inputs": {"clip_vision": ["1", 1], "image": ["2", 0], "crop": m["crop"]}},
         "4": {"class_type": "Hunyuan3Dv2Conditioning", "inputs": {"clip_vision_output": ["3", 0]}},
-        "5": {"class_type": "EmptyLatentHunyuan3Dv2", "inputs": {"resolution": 3072, "batch_size": 1}},
+        "5": {"class_type": "EmptyLatentHunyuan3Dv2", "inputs": {"resolution": m["resolution"], "batch_size": 1}},
         "6": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": 1.0}},
         "7": {"class_type": "KSampler", "inputs": {
             "model": ["6", 0], "positive": ["4", 0], "negative": ["4", 1], "latent_image": ["5", 0],
@@ -55,13 +61,13 @@ def workflow(image_name: str, name: str, seed: int = 1):
     }
 
 
-def run(path: Path):
+def run(path: Path, model: str = "hunyuan"):
     name = path.stem
     image_name = upload(path)
     watch = VramWatch()
     watch.start()
     t0 = time.time()
-    pid = api("/prompt", {"prompt": workflow(image_name, name), "client_id": str(uuid.uuid4())})["prompt_id"]
+    pid = api("/prompt", {"prompt": workflow(image_name, name, model=model), "client_id": str(uuid.uuid4())})["prompt_id"]
     while True:
         h = api(f"/history/{pid}")
         if pid in h:
@@ -92,8 +98,12 @@ def main():
         w = csv.DictWriter(f, fieldnames=["name", "seconds", "peak_vram_mib", "file"])
         if new:
             w.writeheader()
-        for p in sys.argv[1:]:
-            r = run(Path(p))
+        args = sys.argv[1:]
+        model = "hunyuan"
+        if "--model" in args:
+            i = args.index("--model"); model = args[i + 1]; del args[i:i + 2]
+        for p in args:
+            r = run(Path(p), model)
             w.writerow(r)
             f.flush()
             print(f"{r['name']:<24} {r['seconds']:>6}s  peak {r['peak_vram_mib']} MiB  -> {r['file'] or 'NO GLB FOUND'}", flush=True)

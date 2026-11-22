@@ -14,7 +14,7 @@ prompt ── FLUX ──▶ picture ── rembg ──▶ cut-out ─┬─ TR
 
 | Thing | Notes |
 |---|---|
-| ComfyUI, running | With `flux1-schnell-fp8.safetensors` (or Chroma, for `--painter chroma`: see below) and `hunyuan3d-dit-v2.safetensors` in `models/checkpoints/` (`sd_xl_base_1.0.safetensors` too, for tileable patterns). A 12 GB GPU is enough. |
+| ComfyUI, running | With `flux1-schnell-fp8.safetensors` (or Chroma, for `--painter chroma`: see below) and `hunyuan3d-dit-v2.safetensors` (and, for `--mesh hunyuan21`, Comfy-Org's `hunyuan_3d_v2.1.safetensors`: it goes in `models/checkpoints/` too, although its card says `diffusion_models/`, because the 3D loader only looks there) in `models/checkpoints/` (`sd_xl_base_1.0.safetensors` too, for tileable patterns). A 12 GB GPU is enough. |
 | TRELLIS.2 files (optional, `forge.py`'s default mesh step) | ComfyUI 0.46 or newer, and six files (9.6 GB) from ComfyUI's own Hugging Face organisation; see "TRELLIS.2" below. |
 | Blender 4.2 or newer | Tested on 5.3. |
 | Python 3 | With the packages in `requirements.txt`. ComfyUI's own virtual environment already has most of them. |
@@ -113,7 +113,7 @@ The script makes every decision; the model only answers questions. Each round:
 | draw | fixed seeds | `--seeds` FLUX pictures; seeds come from `--seed` and the round |
 | measure | numbers | Each cut-out: one object, not cut off, 4 to 75 % of the picture, a white border (a soft floor shadow is fine), symmetry. A picture that fails is out |
 | pick | model, then a rule | The model scores each picture on its own; the best that passed the measures wins (ties: symmetry, then seed) |
-| mesh | the pipeline | `--mesh trellis` (default): TRELLIS.2, colours on every side. `--mesh hunyuan`: Hunyuan3D 2 and the picture projected on |
+| mesh | the pipeline | `--mesh trellis` (default): TRELLIS.2, colours on every side. `--mesh hunyuan` / `--mesh hunyuan21`: Hunyuan3D 2 or 2.1, and the picture projected on |
 | check | numbers, then model | The mesh's front silhouette must match the picture (IoU 0.55 for Hunyuan3D, 0.45 for TRELLIS.2); then the model scores `review.png` against the brief and the style's `about`. A pass needs both, and a score of `--pass` or more |
 | next | a rule | A wrong drawing: the model rewrites the subject, new seeds. A poor mesh: the next-best picture and 1.5x the triangles |
 
@@ -218,6 +218,15 @@ tab.
 
 To try a 3D model on Hugging Face's GPUs before installing it, and what that costs, see
 [HUGGINGFACE.md](HUGGINGFACE.md).
+
+## Hunyuan3D 2.1, locally
+
+`--mesh hunyuan21` runs Hunyuan3D 2.1's shape model with ComfyUI's own nodes, following its 2.1 template (a 4096
+latent, a centred crop). Tried on a desk, a standing figure and a creature: about 80 to 90 seconds each, with an
+11.4 GB peak on a 12 GB GPU. Its shapes are clean and closed (one piece, drawers and fingers read well), but it
+makes no colours: the front picture is projected through, so sides and backs are a pale smear. TRELLIS.2 is still
+the better all-round choice; Hunyuan3D 2.1 is the cleaner shape. Its texture model is not in ComfyUI and needs
+far more than 12 GB.
 
 ## TRELLIS.2: colours on every side, locally
 

@@ -33,13 +33,14 @@ THUMBS = OUT / "viewer-thumbs"
 SERVED = {".glb", ".png", ".jpg", ".jpeg", ".webp", ".json"}
 # who made a model: a short name for the card, and the whole chain for the info panel
 FORGE = "FLUX schnell drew it, {mesh} made the 3D model, Blender reduced it; Qwen3-VL 8B planned and judged (all local)"
-MESHER = {"trellis": "TRELLIS.2", "hunyuan": "Hunyuan3D 2"}
+MESHER = {"trellis": "TRELLIS.2", "hunyuan": "Hunyuan3D 2", "hunyuan21": "Hunyuan3D 2.1"}
 WAYS = {  # compare/<way>/: a log.json "made_by" says it better, when there is one
     "rodin": ("Rodin", "Hyper3D Rodin (hosted, paid credits), from the forge's picture"),
     "blender": ("Blender", "the forge's TRELLIS.2 model, cleaned up and reduced in Blender by a script"),
     "pixal3d": ("Pixal3D", "Pixal3D (TencentARC), shape and texture, on a Hugging Face Space"),
     "hunyuan21": ("Hunyuan3D 2.1", "Hunyuan3D 2.1 (Tencent), shape and PBR texture, on a Hugging Face Space"),
     "hi3d": ("Hi3D", "Hi3D v1.0 (a Sparc3D refiner), shape only, on a Hugging Face Space"),
+    "hy21-local": ("Hunyuan3D 2.1 local", "Hunyuan3D 2.1 in ComfyUI on this machine (shape), the picture projected on in Blender"),
     "direct3d": ("Direct3D-V3", "Direct3D-V3, shape only, refining the forge's TRELLIS.2 mesh, on a Hugging Face Space"),
 }
 ROUND = re.compile(r"^(?P<name>.+)-r(?P<round>\d+)-s(?P<seed>\d+)(?P<dense>-dense)?\.glb$")

@@ -1,7 +1,7 @@
 """A brief in, a checked prop out, made the same way every time, with local models only.
 
     python forge.py "a sprinkled donut" [--style toy] [--name NAME] [--seed 1] [--seeds 4] [--rounds 3]
-                    [--pass 7] [--mesh trellis|hunyuan] [--shape tall|wide|square] [--tris N] [--fill] [--fresh]
+                    [--pass 7] [--mesh trellis|hunyuan|hunyuan21] [--shape tall|wide|square] [--tris N] [--fill] [--fresh]
     python forge.py --batch briefs.json [--fresh]       # every brief in a file, one after another
 
 Needs ComfyUI (FLUX schnell, Hunyuan3D 2), Blender and Ollama with a vision model (README.md). Nothing leaves
@@ -57,7 +57,7 @@ GATES = {
     "white": 0.90,           # this share of the picture's border is near white (a soft floor shadow is fine)
     # the mesh's front silhouette overlaps the picture's this much. TRELLIS.2's is lower for a good model: it
     # rests objects as they would stand (a donut lies flat) and thin legs barely register on the coarse grid
-    "front_iou": {"hunyuan": 0.55, "trellis": 0.45},
+    "front_iou": {"hunyuan": 0.55, "hunyuan21": 0.55, "trellis": 0.45},
     "pick": 5,               # the model's lowest acceptable picture score (0-10)
 }
 FIGURE_TRIS = 3000           # a character, animal or person: at 1000-1500 a standing figure looks faceted
@@ -302,7 +302,7 @@ def draw(folder, prompt, seed, shape="square"):
 
 def make_mesh(rdir, source, tris, fill, engine="trellis"):
     shutil.copy(source, rdir / "source.png")
-    dense = ".hunyuan.json" if engine == "hunyuan" else ".trellis.json"
+    dense = f".{engine}.json"
     # an earlier round with the same picture already has its cut-out and mesh: take them, with their keys
     for prev in sorted(rdir.parent.glob("r*")):
         if prev != rdir and (prev / dense).exists() and (prev / "source.png").exists()                 and fhash(prev / "source.png") == fhash(source) and not (rdir / dense).exists():
@@ -337,10 +337,10 @@ def make_mesh(rdir, source, tris, fill, engine="trellis"):
 
     def hunyuan():
         comfy_3d.OUT = rdir
-        r = comfy_3d.run(rdir / "prepared.png")
+        r = comfy_3d.run(rdir / "prepared.png", engine)
         Path(r["file"]).replace(rdir / "raw.glb")
-        return {"seconds": r["seconds"]}
-    step(rdir, "hunyuan", {"prepared": fhash(rdir / "prepared.png"), "ckpt": comfy_3d.CKPT, "code": CODE["comfy_3d.py"]},
+        return {"seconds": r["seconds"], "peak_vram_mib": r["peak_vram_mib"]}
+    step(rdir, engine, {"prepared": fhash(rdir / "prepared.png"), "ckpt": comfy_3d.MODELS[engine], "code": CODE["comfy_3d.py"]},
          [rdir / "raw.glb"], hunyuan)
 
     def lowpoly():
@@ -410,8 +410,9 @@ def main():
     p.add_argument("--seeds", type=int, default=4)
     p.add_argument("--rounds", type=int, default=3)
     p.add_argument("--pass", dest="pass_mark", type=int, default=7)
-    p.add_argument("--mesh", choices=["trellis", "hunyuan"], default="trellis",
-                   help="trellis: shape and colours on every side (slower); hunyuan: shape only, the picture projected on")
+    p.add_argument("--mesh", choices=["trellis", "hunyuan", "hunyuan21"], default="trellis",
+                   help="trellis: shape and colours on every side (slower); hunyuan / hunyuan21 (Hunyuan3D 2 / 2.1): "
+                        "shape only, the picture projected on")
     p.add_argument("--tris", type=int, help="the triangle budget, instead of the planner's")
     p.add_argument("--shape", choices=list(CANVAS), help="the picture's shape, instead of the planner's")
     p.add_argument("--fill", action="store_true", help="keep pale or see-through panels the cut-out punches out")
