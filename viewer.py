@@ -32,17 +32,21 @@ OUT = config.OUT
 THUMBS = OUT / "viewer-thumbs"
 SERVED = {".glb", ".png", ".jpg", ".jpeg", ".webp", ".json"}
 # who made a model: a short name for the card, and the whole chain for the info panel
-FORGE = "FLUX schnell drew it, {mesh} made the 3D model, Blender reduced it; Qwen3-VL 8B planned and judged (all local)"
+FORGE = "{painter} drew it, {mesh} made the 3D model, Blender reduced it; Qwen3-VL 8B planned and judged (all local)"
+PAINTER = {"flux": "FLUX schnell", "chroma": "Chroma1-HD"}
 MESHER = {"trellis": "TRELLIS.2", "hunyuan": "Hunyuan3D 2", "hunyuan21": "Hunyuan3D 2.1"}
-WAYS = {  # compare/<way>/: a log.json "made_by" says it better, when there is one
-    "rodin": ("Rodin", "Hyper3D Rodin (hosted, paid credits), from the forge's picture"),
-    "blender": ("Blender", "the forge's TRELLIS.2 model, cleaned up and reduced in Blender by a script"),
-    "pixal3d": ("Pixal3D", "Pixal3D (TencentARC), shape and texture, on a Hugging Face Space"),
-    "hunyuan21": ("Hunyuan3D 2.1", "Hunyuan3D 2.1 (Tencent), shape and PBR texture, on a Hugging Face Space"),
-    "hi3d": ("Hi3D", "Hi3D v1.0 (a Sparc3D refiner), shape only, on a Hugging Face Space"),
-    "hy21-local": ("Hunyuan3D 2.1 local", "Hunyuan3D 2.1 in ComfyUI on this machine (shape), the picture projected on in Blender"),
-    "direct3d": ("Direct3D-V3", "Direct3D-V3, shape only, refining the forge's TRELLIS.2 mesh, on a Hugging Face Space"),
+# compare/<way>/: short name, whole chain, and where it ran ("remote" ones may cost credits). A log.json "maker",
+# "made_by", "where" and "credits" say it better, when there are
+WAYS = {
+    "rodin": ("Rodin", "Hyper3D Rodin (hosted, paid credits), from the forge's picture", "remote"),
+    "blender": ("Blender", "the forge's TRELLIS.2 model, cleaned up and reduced in Blender by a script", "local"),
+    "pixal3d": ("Pixal3D", "Pixal3D (TencentARC), shape and texture, on a Hugging Face Space", "remote"),
+    "hunyuan21": ("Hunyuan3D 2.1", "Hunyuan3D 2.1 (Tencent), shape and PBR texture, on a Hugging Face Space", "remote"),
+    "hi3d": ("Hi3D", "Hi3D v1.0 (a Sparc3D refiner), shape only, on a Hugging Face Space", "remote"),
+    "hy21-local": ("Hunyuan3D 2.1", "Hunyuan3D 2.1 in ComfyUI on this machine (shape), the picture projected on in Blender", "local"),
+    "direct3d": ("Direct3D-V3", "Direct3D-V3, shape only, refining the forge's TRELLIS.2 mesh, on a Hugging Face Space", "remote"),
 }
+PAID_WAYS = {"rodin"}  # a paid service: counted as paid when its log has no credits figure
 ROUND = re.compile(r"^(?P<name>.+)-r(?P<round>\d+)-s(?P<seed>\d+)(?P<dense>-dense)?\.glb$")
 
 
@@ -70,7 +74,7 @@ def catalogue():
         st = f.stat()
         thumb = f"{rel(f).replace('/', '__')}-{int(st.st_mtime)}.webp"
         return {"file": rel(f), "group": group, "bytes": st.st_size, "mtime": int(st.st_mtime),
-                "thumb": thumb, "has_thumb": (THUMBS / thumb).exists(), **extra}
+                "thumb": thumb, "has_thumb": (THUMBS / thumb).exists(), "where": "local", "paid": False, **extra}
 
     for f in sorted((OUT / "models").glob("*.glb")):
         m = ROUND.match(f.name)
@@ -78,7 +82,8 @@ def catalogue():
         run = all_runs.get(name, {})
         mesher = MESHER.get(run.get("mesh", "trellis"), run.get("mesh"))
         info = {"name": name, "brief": run.get("brief", ""), "style": run.get("style", ""), "maker": mesher,
-                "made_by": f"{mesher}, its dense model before Blender" if m and m["dense"] else FORGE.format(mesh=mesher)}
+                "made_by": f"{mesher}, its dense model before Blender" if m and m["dense"]
+                else FORGE.format(mesh=mesher, painter=PAINTER.get(run.get("painter", "flux"), "FLUX schnell"))}
         if m:
             info |= {"round": int(m["round"]), "seed": int(m["seed"]), "dense": bool(m["dense"])}
             r = next((r for r in run.get("round", []) if r.get("library") == f.name.replace("-dense", "")), None)
@@ -101,7 +106,7 @@ def catalogue():
         v, mesh = last.get("verdict") or {}, last.get("mesh") or {}
         mesher = MESHER.get(run.get("mesh", "trellis"), run.get("mesh"))
         items.append(entry(glb, "props", name=d.name, brief=run.get("brief", ""), style=run.get("style", ""),
-                           maker=mesher, made_by=FORGE.format(mesh=mesher),
+                           maker=mesher, made_by=FORGE.format(mesh=mesher, painter=PAINTER.get(run.get("painter", "flux"), "FLUX schnell")),
                            round=res.get("round"), subject=last.get("subject"), score=v.get("score"),
                            problems=v.get("problems", []), front_iou=mesh.get("front_iou"), tris=mesh.get("tris"),
                            passed=res.get("passed"), review=rel(d / "review.png") if (d / "review.png").exists() else None,
@@ -116,13 +121,17 @@ def catalogue():
         way = f.parents[1].name
         review = f.parent / "review.png"
         prop = f.parent.name
-        short, long = WAYS.get(way, (way, way))
+        short, long, where = WAYS.get(way, (way, way, "local"))
+        where = log.get("where", where)
+        credits = log.get("credits")
+        paid = where == "remote" and (credits > 0 if isinstance(credits, (int, float)) else way in PAID_WAYS)
         items.append(entry(f, "compare", name=f"{prop} · {way}" + ("" if f.stem == prop else f" · {f.stem}"), brief=all_runs.get(log.get("prop", ""), {}).get("brief", ""),
                            tris=log.get("triangles"), subject=f"{way}: {log.get('wall_seconds')} s"
                            + (f", {log['credits']} credits" if log.get("credits") is not None else ""),
                            problems=[log["notes"]] if isinstance(log.get("notes"), str) else log.get("notes", []),
                            review=rel(review) if review.exists() else None,
-                           maker=log.get("maker", short), made_by=log.get("made_by", long)))
+                           maker=log.get("maker", short), made_by=log.get("made_by", long), where=where, paid=paid,
+                           credits=credits))
     for f in sorted((OUT / "meshes").glob("*.glb")) if (OUT / "meshes").is_dir() else []:
         maker = next((v for k, v in (("trellis", "TRELLIS.2"), ("hunyuan", "Hunyuan3D 2")) if k in f.stem), None)
         items.append(entry(f, "tests", name=f.stem, maker=maker, made_by=maker and f"{maker} (an early test)"))

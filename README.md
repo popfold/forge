@@ -204,7 +204,10 @@ A grid of every model in `<out>`: the props (each final model, with its review s
 round's model in `<out>/models`, the dense ones and the test meshes. Tap one to turn it around, in wireframe if
 you like, with what its `run.json` says: the brief, the judge's score and problems, the front match, triangles and
 size, and what made it ("Made by": the picture, mesh and clean-up models, or the hosted service). A link to one
-model is the page's address with `#<file>`. An open page picks up new models every 30 seconds; it sorts them newest or oldest first, by name or by maker, and
+model is the page's address with `#<file>`. Each thumbnail says where the model was made: a green badge (local) or a purple one (remote, on a
+hosted service), with the model's name, and on remote ones `$` when real credits were spent or a smiley when
+they were free (the `credits` in its `log.json`; a `where` there overrides the default for its folder). Filter by
+local or remote, paid or free, and by model; the All tab shows every group at once. An open page picks up new models every 30 seconds; it sorts them newest or oldest first, by name or by maker, and
 shows when each was made. It serves `<out>` read-only, with three.js from
 three.js from `$FORGE_THREE`, a `node_modules` here (`pnpm add three`) or a Popfold checkout beside this folder,
 and nothing but Python's standard library. The first browser to show a model draws its
