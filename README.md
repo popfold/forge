@@ -407,3 +407,12 @@ loaded from saved workflow files.
 - **One GPU job at a time.** Do not start a second batch while one runs.
 
 More on choosing between this and the other ways to get a model: the repository's `docs/models.md`.
+
+## Credits
+
+Made by Dimiter Todorov, with Claude (Anthropic) writing much of the code and documentation.
+
+The forge drives models it does not ship; each keeps its own licence: TRELLIS.2 (Microsoft, MIT), Hunyuan3D 2 and
+2.1 (Tencent, Tencent Hunyuan Community licence), FLUX.1 schnell (Black Forest Labs, Apache 2.0), Chroma1-HD
+(lodestones, Apache 2.0), Qwen3-VL (Alibaba Qwen, Apache 2.0), BiRefNet and rembg for cut-outs, ComfyUI and Blender.
+Check a model's licence before shipping what it made.
