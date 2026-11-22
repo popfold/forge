@@ -214,6 +214,9 @@ Side-by-side trials go in `<out>/compare/<way>/<prop>/<prop>.glb`, with `review.
 (`wall_seconds`, `credits`, `triangles`, `notes`, and optionally `maker` and `made_by`); they show in the Compare
 tab.
 
+To try a 3D model on Hugging Face's GPUs before installing it, and what that costs, see
+[HUGGINGFACE.md](HUGGINGFACE.md).
+
 ## TRELLIS.2: colours on every side, locally
 
 Hunyuan3D 2 makes only the shape; the colours are the front picture projected through, so sides and backs are a
