@@ -233,6 +233,11 @@ latent, a centred crop). It takes a picture only, no prompt. Tried on seven prop
   chair TRELLIS.2 crumpled came out smooth on clean legs (0.76 against 0.38). Always one closed piece.
 - **No colours.** The front picture is projected through, so sides and backs are a stretched smear: fine for
   furniture seen from the front, poor for figures seen all round (they go pale away from the front).
+- **One model's shape, another's colours.** `blender_transfer.py SHAPE.glb COLOURS.glb OUT.glb [--reach 0.3]` bakes the
+  colours of one prop onto the shape of another made from the same picture (both fitted with `blender_fit.py`
+  first): Hunyuan3D 2.1's or Hi3D's shape with TRELLIS.2's colours on every side. It works where the two shapes
+  agree; where they part (a tentacle bent differently) the bake finds nothing and leaves black or speckles. A
+  longer `--reach` (0.3 rather than 0.06) closes most of them.
 - Choose by what will be seen: `hunyuan21` for furniture and thin or curved parts, `trellis` (the default) for
   figures and anything seen from every side. Its texture model is not in ComfyUI and needs far more than 12 GB.
 
