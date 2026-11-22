@@ -206,7 +206,8 @@ you like, with what its `run.json` says: the brief, the judge's score and proble
 size, and what made it ("Made by": the picture, mesh and clean-up models, or the hosted service). A link to one
 model is the page's address with `#<file>`. An open page picks up new models every 30 seconds; it sorts them newest or oldest first, by name or by maker, and
 shows when each was made. It serves `<out>` read-only, with three.js from
-Popfold's `node_modules` and nothing but Python's standard library. The first browser to show a model draws its
+three.js from `$FORGE_THREE`, a `node_modules` here (`pnpm add three`) or a Popfold checkout beside this folder,
+and nothing but Python's standard library. The first browser to show a model draws its
 thumbnail and sends it back to `<out>/viewer-thumbs/`, so a phone downloads a small picture per model, not
 every model. What comes through a tunnel cannot save thumbnails: leave `http://127.0.0.1:5195/?thumbs` open on this
 machine and it draws every missing one as models arrive.

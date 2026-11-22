@@ -6,14 +6,15 @@ Serves <out> (config.py) read-only: the library in <out>/models, each prop's fin
 progress pictures in <out>/props, and the test meshes in <out>/meshes. Each model is shown with what its
 run.json says about it (the brief, the judge's score and problems, the front match, triangles, size).
 --host 0.0.0.0 lets a phone on the same network open it; a tunnel to the port works too (what comes through a
-tunnel can only read: it cannot save thumbnails). three.js comes from
-Popfold's own node_modules (run pnpm install in the Popfold folder first). Standard library only.
+tunnel can only read: it cannot save thumbnails). three.js comes from $FORGE_THREE, a node_modules here,
+or a Popfold checkout beside this folder. Standard library only.
 
 Thumbnails are drawn by the first browser that shows a model and sent back to <out>/viewer-thumbs, so a phone
 downloads a small picture per model instead of every model.
 """
 import json
 import mimetypes
+import os
 import re
 import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -23,7 +24,10 @@ from urllib.parse import unquote, urlparse
 import config
 
 HERE = Path(__file__).parent
-THREE = HERE.parents[1] / "node_modules" / "three"
+# three.js: $FORGE_THREE, else a node_modules here (npm/pnpm add three), else a Popfold checkout beside this one
+THREE_AT = ([Path(os.environ["FORGE_THREE"])] if os.environ.get("FORGE_THREE") else []) + [
+    HERE / "node_modules" / "three", HERE.parent / "popfold" / "node_modules" / "three"]
+THREE = next((p for p in THREE_AT if (p / "build" / "three.module.js").exists()), THREE_AT[0])
 OUT = config.OUT
 THUMBS = OUT / "viewer-thumbs"
 SERVED = {".glb", ".png", ".jpg", ".jpeg", ".webp", ".json"}
@@ -172,6 +176,7 @@ if __name__ == "__main__":
     opt = lambda k, d: type(d)(a[a.index(k) + 1]) if k in a else d  # noqa: E731
     host, port = opt("--host", "127.0.0.1"), opt("--port", 5195)
     if not (THREE / "build" / "three.module.js").exists():
-        sys.exit(f"three.js not found in {THREE}: run pnpm install in the Popfold folder")
+        sys.exit("three.js not found: set FORGE_THREE to a three folder, run pnpm add three here, "
+                 "or keep a Popfold checkout (with pnpm install done) beside this folder")
     print(f"forge viewer: http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}  ({OUT})", flush=True)
     ThreadingHTTPServer((host, port), Handler).serve_forever()
