@@ -222,6 +222,30 @@ tab.
 To try a 3D model on Hugging Face's GPUs before installing it, and what that costs, see
 [HUGGINGFACE.md](HUGGINGFACE.md).
 
+## Working around a model's filters
+
+A brief for an adult novelty piece (here an octopus-dinosaur whose tentacles end in sex toys, the "Dildosaurus") is
+softened twice before it becomes a model, by two different things, and each needs its own way round.
+
+![FLUX's four first renders of the brief: ball-tipped tentacles instead of what was asked for](docs/filters-flux-first-renders.webp)
+
+*The first renders: FLUX schnell, four seeds, from the planner's rewritten subject. Every tentacle ends in a ball.*
+
+1. **The planner rewrites what it finds rude.** The local language model that turns a brief into a subject for the
+   painter (Qwen3-VL 8B) changed the toy tentacles into "rounded tips", so the painter was never asked for them.
+   `--subject "..."` sends your own words to the painter unchanged; later rounds keep them and change only the seeds.
+2. **The painter cannot draw what its training left out.** Given the real wording, in three phrasings, FLUX schnell
+   still drew mushroom caps and balls: no prompt brings back shapes its training data filtered out. Change the
+   painter instead: `--painter chroma` draws with Chroma1-HD (Apache 2.0), built on FLUX schnell but trained
+   without that filtering. It drew the brief as written on the first seed (not shown here), at about ten times
+   FLUX's time.
+3. **The 3D models do not filter.** TRELLIS.2, Hunyuan3D 2 and 2.1 turn whatever shape is in the picture into a
+   mesh, so once the picture is right the rest of the pipeline follows.
+
+Hosted services are another matter: a paid or free service (Rodin, a Hugging Face Space) has its own terms for
+what it will make and keep. Read them before sending it an adult brief, and keep such models out of anything public
+that has rules of its own.
+
 ## Hunyuan3D 2.1, locally
 
 `--mesh hunyuan21` runs Hunyuan3D 2.1's shape model with ComfyUI's own nodes, following its 2.1 template (a 4096
