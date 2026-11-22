@@ -1,6 +1,11 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/forge-icon-dark.svg" />
+  <img src="docs/forge-icon-light.svg" alt="Popfold forge: Popfold's P on an anvil" width="96" height="96" />
+</picture>
+
 # Forge: the model pipeline
 
-Scripts that make Popfold props and wall art with local AI models and Blender. A prompt goes in, a low-poly
+Part of [Popfold](https://github.com/popfold/popfold), the engine for scroll-driven 3D pocket homes. Scripts that make Popfold props and wall art with local AI models and Blender. A prompt goes in, a low-poly
 textured `.glb` that follows Popfold's prop convention comes out.
 
 > **Alpha.** These are working scripts, not a polished tool. They were written on Windows with one GPU.
