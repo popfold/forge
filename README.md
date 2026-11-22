@@ -417,4 +417,6 @@ The forge drives models it does not ship; each keeps its own licence: TRELLIS.2 
 (lodestones, Apache 2.0), Qwen3-VL (Alibaba Qwen, Apache 2.0), BiRefNet and rembg for cut-outs, ComfyUI and Blender.
 Check a model's licence before shipping what it made.
 
-The forge itself is all rights reserved: see [LICENSE](LICENSE).
+The forge itself is open source under the MIT licence: see [LICENSE](LICENSE). The models it drives are not part of
+it and keep their own licences, and so does what they make: Hunyuan3D 2.1's licence, for one, does not cover the
+European Union, the United Kingdom or South Korea.
