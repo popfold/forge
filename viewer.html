@@ -13,6 +13,8 @@
   h1 small { color: var(--dim); font-weight: 400; }
   .bar { display: flex; gap: 8px; flex-wrap: wrap; }
   input[type=search] { flex: 1 1 160px; min-width: 0; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; }
+  select { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font: inherit; }
+  .card .d { color: var(--dim); font-size: 11px; margin-top: 2px; }
   .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
   button, .tabs label { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; font: inherit; cursor: pointer; }
   .tabs input { display: none; }
@@ -51,6 +53,10 @@
   <h1>Forge models <small id="count"></small></h1>
   <div class="bar">
     <input id="q" type="search" placeholder="Search names and briefs">
+    <select id="sort" aria-label="Sort">
+      <option value="new">Newest first</option><option value="old">Oldest first</option>
+      <option value="name">Name</option><option value="maker">Made by</option>
+    </select>
     <div class="tabs" id="tabs">
       <label><input type="radio" name="g" value="props" checked><span>Props</span></label>
       <label><input type="radio" name="g" value="library"><span>Every round</span></label>
@@ -167,11 +173,18 @@ const seen = new IntersectionObserver((es) => {
   }
 }, { rootMargin: '300px' });
 
+// the server lists newest first; the name sorts keep newest first within a name or maker
+const byNew = (a, b) => b.mtime - a.mtime;
+const SORTS = { new: byNew, old: (a, b) => a.mtime - b.mtime,
+  name: (a, b) => a.name.localeCompare(b.name) || byNew(a, b),
+  maker: (a, b) => (a.maker || '~').localeCompare(b.maker || '~') || byNew(a, b) };
+const when = (s) => new Date(s * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 function kind() { return document.querySelector('#tabs input:checked').value; }
 function list() {
   const g = kind(), q = $('#q').value.trim().toLowerCase();
   shown = all.filter((i) => g === 'dense' ? i.dense : g === 'library' ? i.group === 'library' && !i.dense : i.group === g)
-    .filter((i) => !q || (i.name + ' ' + (i.brief || '')).toLowerCase().includes(q));
+    .filter((i) => !q || (i.name + ' ' + (i.brief || '') + ' ' + (i.maker || '')).toLowerCase().includes(q))
+    .sort(SORTS[$('#sort').value] || SORTS.new);
   $('#count').textContent = `${shown.length} of ${all.length}`;
   const grid = $('#grid'); grid.innerHTML = '';
   if (!shown.length) grid.innerHTML = '<div class="empty">Nothing here.</div>';
@@ -180,7 +193,7 @@ function list() {
     const tag = (i.maker ? i.maker + ' · ' : '') + (i.group === 'library' ? `r${i.round} s${i.seed}${i.score != null ? ' · ' + i.score + '/10' : ''}${i.final ? ' · final' : ''}` : kb(i.bytes));
     const el = document.createElement('div'); el.className = 'card';
     el.innerHTML = `<div class="pic"><img data-i="${n}" alt=""></div><div class="t"><div class="n">${esc(i.name)}</div>` +
-      `<div class="m"><span class="dot ${passed}"></span>${esc(tag)}</div></div>`;
+      `<div class="m"><span class="dot ${passed}"></span>${esc(tag)}</div><div class="d">${when(i.mtime)}</div></div>`;
     el.onclick = () => open(n);
     const img = el.querySelector('img');
     grid.append(el);
@@ -208,7 +221,7 @@ function info(i) {
   const rows = [['Made by', i.made_by], ['Brief', i.brief || prop.brief], ['Subject', i.subject], ['Style', i.style],
     ['Judge', i.score != null ? `${i.score}/10${i.passed ? ', passed' : ', not passed'}` : i.passed != null ? (i.passed ? 'passed' : 'not passed') : ''],
     ['Problems', (i.problems || []).join('; ')], ['Gates', (i.gate_fails || []).join('; ')],
-    ['Front match', i.front_iou], ['Triangles', i.tris], ['Size', kb(i.bytes)], ['File', i.file]].filter((r) => r[1] !== undefined && r[1] !== null && r[1] !== '');
+    ['Front match', i.front_iou], ['Triangles', i.tris], ['Size', kb(i.bytes)], ['Made', when(i.mtime)], ['File', i.file]].filter((r) => r[1] !== undefined && r[1] !== null && r[1] !== '');
   const pics = [i.review || prop.review, ...(prop.progress || [])].filter(Boolean);
   $('#info').innerHTML = `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` +
     (pics.length ? `<div class="pics">${pics.map((p) => `<img src="${url(p)}" alt="">`).join('')}</div>` : '');
@@ -255,6 +268,8 @@ $('#info').addEventListener('touchend', (e) => {
 });
 
 $('#q').oninput = list;
+try { $('#sort').value = localStorage.getItem('forge-sort') || 'new'; } catch {}
+$('#sort').onchange = () => { try { localStorage.setItem('forge-sort', $('#sort').value); } catch {} list(); };
 document.querySelectorAll('#tabs input').forEach((r) => r.onchange = list);
 window.__forgeReady = true;
 all = await (await fetch('/api/models')).json();
