@@ -73,7 +73,7 @@ Things that tripped us up:
 | Model | Space | Gives | Seconds a prop | Notes |
 |---|---|---|---|---|
 | Pixal3D (TencentARC, MIT) | `TencentARC/Pixal3D` | shape + texture, reduced to the triangles asked | 100-120 | Dented the desk at 3,000 triangles; texture good |
-| Hunyuan3D 2.1 (Tencent, community licence) | `tencent/Hunyuan3D-2.1` | shape + PBR texture, 40,000 triangles | 110-130 | Very good figure; the desk came with a floor slab |
+| Hunyuan3D 2.1 (Tencent, community licence) | `tencent/Hunyuan3D-2.1` | shape + PBR texture, 40,000 triangles | 105-150 | Very good figure. Adds a floor slab under most furniture, even from a cut-out (10 of 15 in a furniture set); ignores the triangle count asked for |
 | Hi3D v1.0 (Sparc3D refiner) | `hugging-apps/hi3dv1` | shape only, ~1M triangles | 80-130 | The sharpest shapes: drawers, knobs, scales |
 | Direct3D-V3 (MIT) | `hugging-apps/direct3d-v3` | shape only, refines a mesh you give it | 60-75 | Sharp, and keeps the forge mesh's pose |
 
