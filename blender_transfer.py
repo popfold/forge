@@ -48,6 +48,13 @@ def box(o):
 
 shape = load(shape_path)
 colour = load(colour_path)
+# Cycles' colour bake darkens base colour by metalness, and textured models from services often carry a metal map
+for m in colour.data.materials:
+    b = m and m.use_nodes and m.node_tree.nodes.get("Principled BSDF")
+    if b:
+        for link in list(b.inputs["Metallic"].links):
+            m.node_tree.links.remove(link)
+        b.inputs["Metallic"].default_value = 0.0
 
 # match the colour model's box to the shape's, axis by axis
 (slo, shi), (clo, chi) = box(shape), box(colour)

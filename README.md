@@ -270,6 +270,28 @@ latent, a centred crop). It takes a picture only, no prompt. Tried on seven prop
 - Choose by what will be seen: `hunyuan21` for furniture and thin or curved parts, `trellis` (the default) for
   figures and anything seen from every side. Its texture model is not in ComfyUI and needs far more than 12 GB.
 
+### Its colours too, from Hugging Face
+
+The Space `tencent/Hunyuan3D-2.1` runs the shape model and its texture model (Hunyuan3D-Paint), which does not fit
+here: the same shapes, with colours on every side (see `HUGGINGFACE.md` for the cost: free within a PRO account's
+daily GPU allowance). Send it the forge's cut-out (`r<round>/prepared.png`). Its models need four steps before
+they are props:
+
+```
+blender -b -P blender_trim_floor.py -- space.glb trimmed.glb            # cut off the floor plate it often adds
+blender -b -P blender_fit.py -- trimmed.glb mask.png fitted.glb          # face front, base on the origin, size 1
+blender -b -P blender_reduce.py -- fitted.glb shape.glb --tris 3000      # weld the seams, reduce, shape only
+blender -b -P blender_transfer.py -- shape.glb fitted.glb prop.glb --size 1024 --reach 0.03   # bake its colours back on
+```
+
+- **The floor.** Ten of fifteen furniture models came back on a square plate cut from the picture's floor, even
+  from a cut-out, often with the feet poking through it. `blender_trim_floor.py` finds it (a thin layer, low down,
+  much wider than the object) and removes it, keeping the feet.
+- **Do not reduce it with `blender_fit.py --tris`.** Its mesh is split at every UV seam, so collapsing stalls,
+  creases the surface and drags texture across the seams (white flecks). `blender_reduce.py` welds first and keeps
+  the shape only; `blender_transfer.py` then bakes fresh colours from the full model, ignoring its metal map, which
+  otherwise darkens the bake.
+
 ## TRELLIS.2: colours on every side, locally
 
 Hunyuan3D 2 makes only the shape; the colours are the front picture projected through, so sides and backs are a
@@ -416,6 +438,9 @@ Each job has a `theme`, `name`, `prompt`, `seed` and a `frame` (`main` 896 × 10
 | `art_run.py` | Python | Wall art |
 | `blender_lowpoly.py` | Blender | Cleans the mesh, reduces it, projects the picture as its texture, normalises it |
 | `blender_fit.py` | Blender | Turns a textured model to face front and sizes it, keeping its texture (TRELLIS.2) |
+| `blender_trim_floor.py` | Blender | Cuts away the floor plate a model was made standing on |
+| `blender_reduce.py` | Blender | Welds a textured model's seams and reduces it to a triangle budget, shape only |
+| `blender_transfer.py` | Blender | Bakes one model's colours onto another's shape (fresh UVs) |
 | `blender_render.py` | Blender | A review sheet: `blender -b -P blender_render.py -- IN.glb OUT.png --views 4` |
 | `ortho_views.py` | Blender | Front, side, top and back with a measuring grid |
 | `blender_assemble.py` | Blender | Joins parts into one animated `.glb` from a JSON spec |
