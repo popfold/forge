@@ -278,7 +278,7 @@ daily GPU allowance). Send it the forge's cut-out (`r<round>/prepared.png`). Its
 they are props:
 
 ```
-blender -b -P blender_trim_floor.py -- space.glb trimmed.glb            # cut off the floor plate it often adds
+blender -b -P blender_trim_floor.py -- space.glb trimmed.glb            # cut off the floor plate it often adds (not for a model with a wide base of its own: look)
 blender -b -P blender_fit.py -- trimmed.glb mask.png fitted.glb          # face front, base on the origin, size 1
 blender -b -P blender_reduce.py -- fitted.glb shape.glb --tris 3000      # weld the seams, reduce, shape only
 blender -b -P blender_transfer.py -- shape.glb fitted.glb prop.glb --size 1024 --reach 0.03   # bake its colours back on

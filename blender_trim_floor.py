@@ -60,8 +60,12 @@ if widest > 1.3 * area(0.3, 1.01):  # some slice low down is much wider than the
 
 if band is not None:
     zl, zh = z0 + band[0] * h, z0 + band[1] * h
-    # the object's own footprint, from well above the plate (a plate is rarely quite flat)
-    s = v[v[:, 2] > zh + 0.1 * h]
+    # the object's own footprint, from just above the plate, so a wide base on it (rocks, a hill) counts as the
+    # object; higher up only while the slice is still plate-wide (a plate is rarely quite flat)
+    for lift in (0.02, 0.04, 0.06, 0.1):
+        if area(band[1] + lift, band[1] + lift + 0.02) < 0.5 * widest:
+            break
+    s = v[v[:, 2] > zh + lift * h]
     (x0, y0), (x1, y1) = s[:, :2].min(0), s[:, :2].max(0)
     mx, my = 0.03 * (x1 - x0), 0.03 * (y1 - y0)
     bm = bmesh.new()
@@ -73,13 +77,13 @@ if band is not None:
 
     # the plate's top: the highest flat face of it outside the object (a plate has a thickness)
     tops = [f.calc_center_median().z for f in bm.faces if abs(f.normal.z) > 0.7
-            and outside(f.calc_center_median()) and f.calc_center_median().z < zh + 0.1 * h]
+            and outside(f.calc_center_median()) and f.calc_center_median().z < zh + lift * h]
     zt = max(tops, default=zh)
 
     def plate(f):
         c = f.calc_center_median()
-        if outside(c):  # the plate, however warped, up to a tenth of the height above it
-            return c.z < zh + 0.1 * h
+        if outside(c):  # the plate, however warped, up to where the footprint was taken
+            return c.z < zh + lift * h
         # under the object: the plate's top and bottom, a little rough, so not quite flat
         return zl - 0.01 * h <= c.z <= zt + 0.005 * h and abs(f.normal.z) > 0.3
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if plate(f)], context="FACES")
