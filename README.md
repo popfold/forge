@@ -286,7 +286,8 @@ blender -b -P blender_transfer.py -- shape.glb fitted.glb prop.glb --size 1024 -
 
 - **The floor.** Ten of fifteen furniture models came back on a square plate cut from the picture's floor, even
   from a cut-out, often with the feet poking through it. `blender_trim_floor.py` finds it (a thin layer, low down,
-  much wider than the object) and removes it, keeping the feet.
+  much wider than the object) and removes it, keeping the feet. Look at the result: a real wide base (a cat
+  tree's) can pass for a plate, and a plate fused to the object leaves a ragged fringe.
 - **Do not reduce it with `blender_fit.py --tris`.** Its mesh is split at every UV seam, so collapsing stalls,
   creases the surface and drags texture across the seams (white flecks). `blender_reduce.py` welds first and keeps
   the shape only; `blender_transfer.py` then bakes fresh colours from the full model, ignoring its metal map, which
