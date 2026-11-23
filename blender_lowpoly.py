@@ -208,6 +208,47 @@ if palette_mode:
         nl = [face_lab[j] for j in nbrs[i] if face_lab[j] >= 0]
         if nl and face_lab[i] not in nl:
             face_lab[i] = np.bincount(nl).argmax()
+    # Hidden faces (sides and back) take the commonest part colour in a wide patch of the picture straight in
+    # front of them: the back of a red cabinet is red. Spreading from the few visible faces instead (at a low
+    # triangle count only a handful) let one wrong edge face paint a whole back grey. A wide patch, not a pixel,
+    # so a small accent in front (a key, a spot, a knob) does not print through.
+    # Faces that look backwards take the colour at the nearest point of the picture's outline instead, the
+    # object's shell: a television's back is its case, not the big screen in front of it.
+    mS = mask[(np.arange(S) * H // S)][:, (np.arange(S) * W // S)]
+    rad = max(2, S // 25)
+    inner = mS.copy()
+    for dy, dx in ((3, 0), (-3, 0), (0, 3), (0, -3)):
+        inner &= np.roll(mS, (dy, dx), (0, 1))
+    rim = np.argwhere(mS & ~inner)  # (y, x) of the outline, a few pixels deep
+    rim_lab = labmap[rim[:, 0], rim[:, 1]]
+    for i in np.where(face_lab < 0)[0]:
+        c = centers[i]
+        cu_ = (c[0] - lo[0]) / (hi[0] - lo[0]); cv_ = (hi[2] - c[2]) / (hi[2] - lo[2])
+        cu_ = (mx0 + (inset + cu_ * (1 - 2 * inset)) * (mx1 - mx0)) / W; cv_ = (my0 + (inset + cv_ * (1 - 2 * inset)) * (my1 - my0)) / H
+        y, x = min(S - 1, int(cv_ * S)), min(S - 1, int(cu_ * S))
+        if facing[i] < -0.3 and len(rim):
+            # the outline to the left and right at the same height (a top edge is often a lid or a highlight)
+            row = np.abs(rim[:, 0] - y) <= rad
+            near = []
+            for side in (rim[:, 1] < x, rim[:, 1] >= x):
+                pick = row & side
+                if pick.any():
+                    dx = np.abs(rim[pick, 1] - x)
+                    near.extend(rim_lab[pick][dx <= dx.min() + rad])
+            if not near:
+                d2 = (rim[:, 0] - y) ** 2 + (rim[:, 1] - x) ** 2
+                near = rim_lab[d2 <= d2.min() + rad * rad * 4]
+            face_lab[i] = np.bincount(np.asarray(near, int), minlength=K).argmax()
+            continue
+        ys, xs = slice(max(0, y - rad), y + rad + 1), slice(max(0, x - rad), x + rad + 1)
+        win = labmap[ys, xs][mS[ys, xs]]
+        if win.size:
+            face_lab[i] = np.bincount(win, minlength=K).argmax()
+    for _ in range(2):  # tidy: a hidden face unlike all its neighbours takes theirs
+        for i in np.where(~visible)[0]:
+            nl = [face_lab[j] for j in nbrs[i] if face_lab[j] >= 0]
+            if len(nl) >= 2 and face_lab[i] not in nl:
+                face_lab[i] = np.bincount(nl).argmax()
     from collections import deque
     q = deque(np.where(face_lab >= 0)[0])
     if not q:

@@ -74,7 +74,7 @@ A job file is a list:
 | `raw_prompt` | A complete prompt, skipping the style |
 | `flat`, `depth` | For thin wall pieces |
 | `fill` | Keep pale glass or panels the cut-out removed |
-| `palette`, `colours` | Flat colours per part instead of the projected picture |
+| `palette`, `colours` | Flat colours per part instead of the projected picture: the low-poly look. With `tris` at 500 a prop is about 58 KB and still reads; sides take the commonest colour in the picture in front of them, backs the colour of the outline at the same height |
 
 `pick_source.py assets.json --out=DIR --seeds=4 name` draws several pictures and keeps the most front-on one.
 
